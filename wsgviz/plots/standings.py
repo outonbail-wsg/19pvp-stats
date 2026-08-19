@@ -1,0 +1,223 @@
+"""Sports-page forms the deck was missing: a standings table, a form board,
+a race over time, and a board per class.
+
+The rest of the deck is almost entirely rows of horizontal bars. These four
+exist as much for their shape as for their numbers - a table, a strip, a set of
+lines and a grid of small boards read differently at a glance.
+"""
+
+from __future__ import annotations
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
+from .. import theme as T
+from ..context import Ctx
+from ..data import CLASS_ORDER
+from .. import rating
+from . import helpers as H
+
+TABLE_ROWS = 20          # standings rows that fit without shrinking the type
+FORM_PLAYERS = 14
+FORM_MATCHES = 25
+RACE_PLAYERS = 6
+
+WIN_COLOR = "#1baf7a"
+LOSS_COLOR = "#e34948"
+
+
+def _qualified(ctx: Ctx) -> pd.DataFrame:
+    q = ctx.qualified.copy()
+    dec = ctx.wsg[~ctx.wsg["draw"]]
+    q["elo"] = rating.elo_ratings(dec)
+    runs = rating.streaks(dec)
+    return q.join(runs, how="left")
+
+
+def power_ranking(ctx: Ctx):
+    """A standings table: rank, character, class, record, rating.
+
+    Drawn as text rather than bars - a league table is read row by row, and a
+    bar chart of Elo would waste the space that the record belongs in.
+    """
+    q = _qualified(ctx).sort_values("elo", ascending=False).head(TABLE_ROWS)
+
+    fig = plt.figure(figsize=(11.5, 9.6))
+    top = T.figure_title(
+        fig, "WSG power ranking",
+        f"Top {TABLE_ROWS} by opponent-adjusted rating, characters with at least "
+        f"{ctx.min_games} matches")
+    bottom = T.footnote(fig, ctx.source_note(
+        "Every character starts at 1500. After each match both sides move by the same "
+        "amount, more when the result was unexpected. Unlike a raw win rate this "
+        "accounts for who was on the other side, so a record built against weak "
+        "opposition is worth less. Bots are unrated and absent, so a thin lobby counts "
+        "the same as a full one."))
+
+    cols = [(0.045, "left", "#"), (0.10, "left", "Character"), (0.34, "left", "Class"),
+            (0.55, "right", "Rating"), (0.68, "right", "W–L"),
+            (0.80, "right", "Win rate"), (0.95, "right", "Run")]
+    y = top - 0.035
+    for x, ha, label in cols:
+        fig.text(x, y, label, fontsize=10, fontweight="semibold",
+                 color=T.INK_SECONDARY, ha=ha, va="center")
+    fig.add_artist(plt.Line2D([0.045, 0.95], [y - 0.018, y - 0.018],
+                              color=T.AXIS, linewidth=1))
+
+    step = (y - 0.02 - bottom) / len(q)
+    for i, (_, r) in enumerate(q.iterrows()):
+        ry = y - 0.038 - i * step
+        colour = H.class_text_colors([r["class_name"]])[0]
+        wins, losses = int(r["wins"]), int(r["games_decided"] - r["wins"])
+        run = int(r["current"]) if pd.notna(r.get("current")) else 0
+        run_txt = f"{run}W" if run > 0 else (f"{abs(run)}L" if run < 0 else "–")
+        cells = [f"{i + 1}", r["player"], r["class_name"] or "unknown",
+                 f"{r['elo']:.0f}", f"{wins}–{losses}",
+                 f"{r['winrate'] * 100:.0f} %", run_txt]
+        for (x, ha, _), text in zip(cols, cells):
+            is_name = text == r["player"]
+            fig.text(x, ry, text, fontsize=10.5 if is_name else 10,
+                     fontweight="semibold" if is_name else "normal",
+                     color=colour if is_name else T.INK_SECONDARY, ha=ha, va="center")
+        if i % 2 == 0:
+            fig.patches.append(plt.Rectangle(
+                (0.035, ry - step * 0.42), 0.925, step * 0.84,
+                transform=fig.transFigure, facecolor=T.PAGE, zorder=-1, linewidth=0))
+    return fig
+
+
+def form_board(ctx: Ctx):
+    """Recent results as a strip per character - a football-style form guide."""
+    dec = ctx.wsg[~ctx.wsg["draw"]].sort_values("at")
+    tot = ctx.totals
+    order = tot.nlargest(FORM_PLAYERS, "games").index
+
+    fig = plt.figure(figsize=(12.5, 7.6))
+    top = T.figure_title(
+        fig, "Recent form",
+        f"Last {FORM_MATCHES} results of the {FORM_PLAYERS} most active characters, "
+        "oldest on the left")
+    bottom = T.footnote(fig, ctx.source_note(
+        "Green is a win, red a loss. Characters with fewer than "
+        f"{FORM_MATCHES} decided matches show a shorter strip."))
+    ax = fig.add_axes([0.155, bottom, 0.80, top - bottom])
+
+    for row, guid in enumerate(order):
+        g = dec[dec["playerGuid"] == guid].tail(FORM_MATCHES)
+        wins = g["win"].to_numpy()
+        # Right-align so the newest result of every character shares a column.
+        offset = FORM_MATCHES - len(wins)
+        for i, v in enumerate(wins):
+            ax.add_patch(plt.Rectangle(
+                (offset + i + 0.12, row + 0.12), 0.76, 0.76,
+                facecolor=WIN_COLOR if v == 1 else LOSS_COLOR, linewidth=0))
+            # Green against red is the one pair red-green colour blindness cannot
+            # separate, so the letter carries the result too.
+            ax.text(offset + i + 0.5, row + 0.5, "W" if v == 1 else "L",
+                    ha="center", va="center", fontsize=7, fontweight="semibold",
+                    color=T.SURFACE)
+        rate = wins.mean() if len(wins) else 0
+        ax.text(FORM_MATCHES + 0.5, row + 0.5, f"{rate*100:.0f} %", va="center",
+                ha="left", fontsize=9, color=T.INK_SECONDARY)
+
+    names = [tot.loc[g, "player"] for g in order]
+    ax.set_yticks(np.arange(len(order)) + 0.5)
+    ax.set_yticklabels(names, fontsize=9.5)
+    for tick, c in zip(ax.get_yticklabels(),
+                       H.class_text_colors(tot.loc[order, "class_name"])):
+        tick.set_color(c)
+    ax.set_xlim(0, FORM_MATCHES + 2.6)
+    ax.set_ylim(len(order), 0)
+    ax.set_xticks([])
+    ax.grid(False)
+    for side in ("top", "right", "left", "bottom"):
+        ax.spines[side].set_visible(False)
+    ax.tick_params(length=0)
+    ax.text(FORM_MATCHES + 0.5, -0.35, "win rate", fontsize=8.5,
+            color=T.INK_MUTED, ha="left", va="center")
+    ax.text(0, -0.35, "older", fontsize=8.5, color=T.INK_MUTED, va="center")
+    ax.text(FORM_MATCHES, -0.35, "newer", fontsize=8.5, color=T.INK_MUTED,
+            ha="right", va="center")
+    return fig
+
+
+def capture_race(ctx: Ctx):
+    """Cumulative captures over the period - the deck's only running total."""
+    w = ctx.wsg
+    daily = (w.groupby(["date", "playerGuid"])["flagCaptures"].sum()
+               .unstack(fill_value=0).sort_index().cumsum())
+    leaders = daily.iloc[-1].nlargest(RACE_PLAYERS).index
+
+    fig = plt.figure(figsize=(12, 6.6))
+    top = T.figure_title(
+        fig, "Flag capture race",
+        f"Running total of captures for the {RACE_PLAYERS} leading characters")
+    bottom = T.footnote(fig, ctx.source_note(
+        "Cumulative over the period, so a line can only rise; a flat stretch means the "
+        "character did not play or did not cap. Colour separates the six lines here "
+        "rather than marking class - three of the leaders are shamans and would "
+        "otherwise share one colour."))
+    xb = T.xband(fig, label=False)
+    ax = fig.add_axes([0.065, bottom + xb, 0.72, top - bottom - xb - 0.05])
+
+    ends = []
+    for guid, colour in zip(leaders, T.CATEGORICAL):
+        series = daily[guid]
+        ax.plot(series.index, series.to_numpy(), color=colour, linewidth=2)
+        ends.append([float(series.iloc[-1]), colour,
+                     f"{ctx.totals.loc[guid, 'player']}  {int(series.iloc[-1])}"])
+
+    T.clean_axes(ax)
+    ax.set_ylabel("captures, running total")
+    ax.set_xlim(daily.index[0], daily.index[-1] + pd.Timedelta(days=0.4))
+    ymax = daily[leaders].to_numpy().max() * 1.08
+    ax.set_ylim(0, ymax)
+
+    # End labels sit at their line's value, but several leaders finish within a
+    # few captures of each other, so push overlapping ones apart.
+    gap = ymax * 0.045
+    ends.sort(key=lambda e: e[0])
+    for i in range(1, len(ends)):
+        if ends[i][0] - ends[i - 1][0] < gap:
+            ends[i][0] = ends[i - 1][0] + gap
+    for y_pos, colour, label in ends:
+        H.label_last_point(ax, daily.index[-1], y_pos, label, colour)
+    ax.xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter("%d %b"))
+    fig.autofmt_xdate(rotation=0, ha="center")
+    return fig
+
+
+def class_boards(ctx: Ctx):
+    """The best of each class - a board every player can find themselves on."""
+    q = _qualified(ctx).dropna(subset=["class_name"])
+    present = [c for c in CLASS_ORDER if (q["class_name"] == c).sum() >= 3]
+
+    fig = plt.figure(figsize=(13.5, 8.6))
+    top = T.figure_title(
+        fig, "Best of each class",
+        f"Top characters per class by power rating, at least {ctx.min_games} matches")
+    bottom = T.footnote(fig, ctx.source_note(
+        "Classes with fewer than three qualified characters are left out. The rating is "
+        "the same opponent-adjusted one as the power ranking."))
+    axes = H.grid_axes(fig, 3, 3, left=0.075, right=0.975, top=top,
+                       bottom=bottom, wspace=0.75, hspace=0.55)
+
+    for i, cls in enumerate(present[:9]):
+        ax = axes[i // 3][i % 3]
+        sub = q[q["class_name"] == cls].nlargest(5, "elo")
+        H.top_hbar(ax, sub["player"], sub["elo"].to_numpy() - 1400,
+                   colors=H.class_colors(sub["class_name"]),
+                   label_colors=H.class_text_colors(sub["class_name"]),
+                   value_fmt=lambda v: f"{v + 1400:.0f}", title=cls)
+    for j in range(len(present), 9):
+        axes[j // 3][j % 3].axis("off")
+    return fig
+
+
+CHARTS = [
+    ("40_power_ranking", power_ranking),
+    ("41_form_board", form_board),
+    ("42_capture_race", capture_race),
+    ("43_class_boards", class_boards),
+]

@@ -10,7 +10,7 @@ profiles and a short arena companion.
 python make_charts.py
 ```
 
-Charts land in `output/` (39 PNGs, numbered `01_…` to `39_…`). The script
+Charts land in `output/` (43 PNGs, numbered `01_…` to `43_…`). The script
 picks the newest `leaderboard-raw-*.csv` in `Data/` automatically.
 
 Options:
@@ -30,7 +30,7 @@ pip install -r requirements.txt
 
 ## The charts
 
-39 charts, numbered in reading order.
+43 charts, numbered in reading order.
 
 **The bracket** — how big the scene is and when it is alive
 | # | File | Shows |
@@ -86,6 +86,12 @@ pip install -r requirements.txt
 | 37 | rivalries | head-to-head matrix + longest win/losing streaks |
 | 38 | flag_efficiency | pickup→capture conversion + objective focus |
 | 39 | first_match | retention curve by whether the debut was won |
+
+**Standings and form** — sports-page shapes the deck was missing
+| 40 | power_ranking | standings table by opponent-adjusted rating (Elo) |
+| 41 | form_board | last 25 results per character as a W/L strip |
+| 42 | capture_race | cumulative captures over the period |
+| 43 | class_boards | best characters of each class |
 
 ### Conventions
 

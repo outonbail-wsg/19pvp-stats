@@ -20,12 +20,12 @@ import matplotlib.pyplot as plt  # noqa: E402
 from wsgviz import context, data, theme  # noqa: E402
 from wsgviz.plots import (  # noqa: E402
     arena, bracket, classes, leaderboards, match, overview, realgames, roles,
-    stories, winfactors,
+    standings, stories, winfactors,
 )
 
 # Ordered to match the chart numbering, so the run log reads in sequence.
 MODULES = [overview, bracket, classes, match, winfactors, realgames, leaderboards,
-           roles, arena, stories]
+           roles, arena, stories, standings]
 
 ROOT = Path(__file__).resolve().parent
 
