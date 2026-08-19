@@ -34,6 +34,14 @@ PATTERNS = [
 # Addresses that are safe by design.
 EMAIL_ALLOW = re.compile(r"@(users\.noreply\.github\.com|example\.com)$", re.I)
 
+# Account names that identify nobody. CI runs as one of these, and matching them
+# as substrings turns ordinary English words ("CLI runner", "user guide") into
+# false alarms that would block a deploy for no reason.
+GENERIC_ACCOUNTS = {
+    "runner", "root", "admin", "administrator", "user", "ubuntu", "vagrant",
+    "docker", "build", "ci", "github", "actions", "default", "guest",
+}
+
 
 def iter_files():
     for dirpath, dirnames, filenames in os.walk(ROOT):
@@ -46,8 +54,10 @@ def iter_files():
 
 def scan(extra_terms: list[str]) -> list[str]:
     findings = []
-    # The account this is running under is the single most likely leak.
+    # The account this is running under is the single most likely leak - unless
+    # it is a generic one, which says nothing about who wrote the code.
     terms = {getpass.getuser().lower()} | {t.lower() for t in extra_terms if t}
+    terms -= GENERIC_ACCOUNTS
     terms.discard("")
 
     for path in iter_files():
