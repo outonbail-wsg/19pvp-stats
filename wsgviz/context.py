@@ -51,10 +51,13 @@ class Ctx:
         return f"{base}\n{extra}" if extra else base
 
 
-# Used only where tracking actually limits the reading of a chart.
+# Used where the bot fill actually limits the reading of a chart. Every real
+# player is in the export - arena confirms it, where all 1,113 2v2 matches carry
+# exactly four rows - so a recorded team is its complete human side, and the
+# missing slots were bots rather than missing data.
 TRACKING_CAVEAT = (
-    "Only addon-tracked real players are recorded; bots fill empty slots and are absent "
-    "from the export, so team totals are samples."
+    "Bots are not in the export, so a team's recorded players are its humans and the "
+    "remaining slots were bots."
 )
 
 

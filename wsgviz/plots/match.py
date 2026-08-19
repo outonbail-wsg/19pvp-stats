@@ -78,44 +78,63 @@ def final_score(ctx: Ctx):
     return fig
 
 
-def tracking_coverage(ctx: Ctx):
-    """Data quality: how much of a match does the export actually see?"""
+def humans_vs_bots(ctx: Ctx):
+    """How much of a team was human, and what an imbalance does to the result."""
     m = ctx.matches
-    caps = m.loc[~m["draw"], "caps_winner"].value_counts().reindex([3, 2, 1, 0]).fillna(0)
+    dec = m[~m["draw"]]
+    humans = pd.concat([dec["tracked_team0"], dec["tracked_team1"]])
 
-    fig = plt.figure(figsize=(12.5, 5.6))
+    # Every real player is in the export, so the recorded count IS the human
+    # count and the rest of the ten slots were bots.
+    adv = (dec["tracked_team0"] - dec["tracked_team1"]).clip(-3, 3)
+    by_adv = pd.DataFrame({"adv": adv, "win": (dec["winner"] == 0).astype(int)})
+    grp = by_adv.groupby("adv")["win"].agg(["mean", "size"])
+    grp = grp[grp["size"] >= 15]
+
+    fig = plt.figure(figsize=(12.5, 5.8))
     top = T.figure_title(
-        fig, "WSG match tracking coverage",
-        "How much of each match the export records")
+        fig, "Humans and bots in a WSG match",
+        "How many of a team's ten slots were real players, and what an imbalance "
+        "does to the result")
     bottom = T.footnote(fig, ctx.source_note(
-        TRACKING_CAVEAT + " Player-level rows are complete in themselves."))
+        TRACKING_CAVEAT + " Counts are distinct players over the match, so a team that "
+        "replaced leavers can show more than ten. Association, not proof that the bots "
+        "are what decide it."))
     xb = T.xband(fig)
     h = top - bottom - xb
 
-    ax1 = fig.add_axes([0.09, bottom + xb, 0.35, h])
-    H.top_hbar(ax1, [f"{int(k)} of 3" for k in caps.index], caps.to_numpy(),
-               value_fmt=T.num, highlight={0},
-               title="Winning team's captures that are tracked")
-    ax1.set_xlabel("matches")
-
-    # Are both teams tracked equally well? Otherwise team comparisons tilt.
-    ax2 = fig.add_axes([0.57, bottom + xb, 0.38, h])
-    diff = m["tracked_team0"] - m["tracked_team1"]
-    ax2.hist(diff, bins=np.arange(diff.min() - 0.5, diff.max() + 1.5, 1),
+    ax1 = fig.add_axes([0.075, bottom + xb, 0.37, h])
+    ax1.hist(humans, bins=np.arange(0, humans.max() + 2) - 0.5,
              color=T.PRIMARY, linewidth=0)
-    ax2.axvline(0, color=T.INK, linewidth=1.4)
-    T.clean_axes(ax2)
-    ax2.set_title("Tracking difference between the teams", fontsize=10.5, pad=8)
-    ax2.set_xlabel("tracked players on team 0 minus team 1")
-    ax2.set_ylabel("matches")
-    ax2.annotate(f"median {T.num(diff.median())}", xy=(0, 1),
-                 xycoords=("data", "axes fraction"), xytext=(8, -8),
+    T.clean_axes(ax1)
+    ax1.set_title("Real players per team", fontsize=10.5, pad=8)
+    ax1.set_xlabel("humans in the team (of 10 slots)")
+    ax1.set_ylabel("team-sides")
+    ax1.annotate(f"median {int(humans.median())}", xy=(humans.median(), 1),
+                 xycoords=("data", "axes fraction"), xytext=(6, -10),
                  textcoords="offset points", fontsize=9, color=T.INK, va="top")
+
+    ax2 = fig.add_axes([0.585, bottom + xb, 0.37, h])
+    x = grp.index.to_numpy()
+    ax2.bar(x, grp["mean"].to_numpy(), width=0.62, color=T.PRIMARY, linewidth=0)
+    T.clean_axes(ax2)
+    H.percent_axis(ax2)
+    ax2.set_title("Win rate by human advantage", fontsize=10.5, pad=8)
+    ax2.set_xlabel("own humans minus enemy humans")
+    ax2.set_ylabel("win rate")
+    ax2.set_xticks(x)
+    ax2.set_xticklabels([f"{int(v):+d}" if v else "0" for v in x])
+    ax2.set_ylim(0, 1)
+    for xi, v, n in zip(x, grp["mean"], grp["size"]):
+        ax2.text(xi, v, f"{v*100:.0f} %", ha="center", va="bottom", fontsize=9,
+                 color=T.INK_SECONDARY)
+        ax2.text(xi, 0.02, f"n={int(n)}", ha="center", va="bottom", fontsize=7.5,
+                 color=T.INK_MUTED)
     return fig
 
 
 CHARTS = [
     ("14_match_length", match_length),
     ("15_final_score", final_score),
-    ("16_tracking_coverage", tracking_coverage),
+    ("16_humans_vs_bots", humans_vs_bots),
 ]

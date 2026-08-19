@@ -10,7 +10,7 @@ profiles and a short arena companion.
 python make_charts.py
 ```
 
-Charts land in `output/` (26 PNGs, numbered `01_…` to `26_…`). The script
+Charts land in `output/` (39 PNGs, numbered `01_…` to `39_…`). The script
 picks the newest `leaderboard-raw-*.csv` in `Data/` automatically.
 
 Options:
@@ -30,7 +30,7 @@ pip install -r requirements.txt
 
 ## The charts
 
-33 charts, numbered in reading order.
+39 charts, numbered in reading order.
 
 **The bracket** — how big the scene is and when it is alive
 | # | File | Shows |
@@ -53,8 +53,8 @@ pip install -r requirements.txt
 
 **Matches and what wins them**
 | 14 | match_length | match-length distribution |
-| 15 | final_score | 3–0 / 3–1 / 3–2 split |
-| 16 | tracking_coverage | how completely a match is recorded |
+| 15 | final_score | how the round ended and on what score |
+| 16 | humans_vs_bots | humans per team, and win rate by human advantage |
 | 17 | win_vs_loss | per-minute stats, winners vs losers |
 | 18 | winrate_by_stat | win rate by performance quintile |
 | 19 | desertion | what leaving costs |
@@ -111,12 +111,16 @@ pip install -r requirements.txt
 
 Read these before trusting any team- or match-level number.
 
-- **Partial tracking / bots.** Only real players running the PvP19 addon are
-  recorded. WSG is filled with bots when too few real players queue, and bots
-  are not in the export, so a low tracked count is usually bot slots, not
-  players missing the addon. Player-level rows are complete; team/match totals
-  are samples. The **full-lobby charts (28–30)** isolate matches with ≥10 tracked
-  players per team, where team totals are near-complete.
+- **Bots, not missing data.** WSG is filled with bots when too few real players
+  queue, and bots are absent from the export. Every real player *is* recorded —
+  arena proves it, where all 1,113 2v2 matches carry exactly four rows — so a
+  team's recorded players are its complete human side (median 4 of 10 slots).
+  The **full-lobby charts (21–24)** isolate matches with ≥8 real players per team.
+- **The round timer is 25 minutes.** A match ends on 3 captures *or* when the
+  timer expires, so 2–1 and 1–0 are ordinary results — the data shows lengths
+  piling up in the last half minute before 25:00 and stopping there. `matches()`
+  records `capped_out` and `timer_ended`; a score is withheld only when the
+  recorded players all left before the end (79 of 775 matches).
 - **Class data (new export).** The current export carries a `class` id (standard
   WoW ids; 6 = Death Knight and 10 = Monk never appear — neither exists at
   level 19). 253 older WSG rows predate class tracking and are excluded from the

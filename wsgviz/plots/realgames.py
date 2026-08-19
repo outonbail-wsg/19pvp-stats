@@ -1,10 +1,9 @@
 """WSG matches played by full lobbies of real (addon-tracked) players.
 
-This server fills WSG with bots when too few real players queue. Bots are not
-in the export, so a low tracked count usually means bot slots, not players
-missing the addon. Matches where both teams fielded at least CONTESTED_PER_TEAM
-real players are therefore the closest thing to a full 10v10, and their team
-totals are nearly complete rather than a sample.
+This server fills WSG with bots when too few real players queue, and bots are
+not in the export, so a low count means bot slots rather than missing data.
+Matches where both teams fielded at least CONTESTED_PER_TEAM real players are
+therefore the closest thing to a full 10v10.
 
 Caveat: a single match holds 10 per team, but up to 14 distinct players rotate
 through a team when deserters are replaced, so "tracked per team" is distinct
