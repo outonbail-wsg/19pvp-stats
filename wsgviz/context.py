@@ -25,8 +25,13 @@ class Ctx:
     rates: pd.DataFrame        # player rows with per-minute columns
     min_games: int             # threshold for average-based leaderboards
     outdir: Path
+    lobby: str = "all"         # "all" or "contested"
 
     meta: dict = field(default_factory=dict)
+
+    @property
+    def contested_only(self) -> bool:
+        return self.lobby == "contested"
 
     @property
     def qualified(self) -> pd.DataFrame:
@@ -48,6 +53,9 @@ class Ctx:
         sample sizes, exclusions, and units. No restating of the title.
         """
         base = f"19pvp export · {self.period_label} · {self.tz}"
+        if self.contested_only:
+            base += (f" · contested lobbies only "
+                     f"({data.CONTESTED_PER_TEAM}+ real players per team)")
         return f"{base}\n{extra}" if extra else base
 
 
@@ -61,11 +69,30 @@ TRACKING_CAVEAT = (
 )
 
 
-def build(csv_path: Path, outdir: Path, tz: str = "UTC", min_games: int = 20) -> Ctx:
+def contested_events(matches: pd.DataFrame) -> pd.Index:
+    """Matches both teams turned up to with a near-full roster of real players."""
+    return matches[(matches["tracked_team0"] >= data.CONTESTED_PER_TEAM)
+                   & (matches["tracked_team1"] >= data.CONTESTED_PER_TEAM)].index
+
+
+def build(csv_path: Path, outdir: Path, tz: str = "UTC", min_games: int = 20,
+          lobby: str = "all") -> Ctx:
+    """Build the shared context.
+
+    `lobby="contested"` drops every match that bots had to fill, and rebuilds the
+    aggregates from what is left - the same code path, a smaller slice.
+    """
     raw = data.load_raw(csv_path, tz=tz)
     w = data.wsg(raw)
+    if lobby == "contested":
+        keep = contested_events(data.matches(w))
+        w = w[w["eventId"].isin(keep)].copy()
+        raw = raw[(raw["kind"] != "wsg") | raw["eventId"].isin(keep)].copy()
+    elif lobby != "all":
+        raise ValueError(f"unknown lobby filter: {lobby!r}")
     return Ctx(
         source=csv_path,
+        lobby=lobby,
         tz=tz,
         raw=raw,
         wsg=w,

@@ -153,13 +153,25 @@ Builds `site/` — a static folder with no backend and no running costs:
 
 - `index.html` — player search plus the full chart gallery. The data is **inlined**,
   so the file works opened by double-click, served from GitHub Pages, or copied to
-  any static host. No `fetch`, no CORS, no database.
-- `charts/` — the PNGs
+  any static host. No `fetch`, no CORS, no database. Click a chart to open it full
+  size and arrow (or swipe) through the set.
+- `charts/` and `charts-contested/` — the PNGs, rendered twice
 - `stats.json` — the same aggregates as a standalone file, for anyone who wants them
 
 The page is a thin viewer on purpose: all statistics are precomputed in Python
 (`wsgviz/webexport.py`), so nothing had to be reimplemented in JavaScript. The
 payload is ~64 KB gzipped for 408 characters.
+
+**Contested lobbies are the default.** A match the bots had to fill is not the game
+players mean when they compare themselves, so the page opens on contested lobbies
+only (`data.CONTESTED_PER_TEAM`+ real players per team) and a checkbox brings the
+rest back. That switch drives everything: the player card, the game log and which
+chart set the gallery shows. Seven charts are about the human/bot split itself and
+exist only in the all-lobby set — see `ALL_LOBBIES_ONLY` in `make_charts.py`.
+
+```bash
+python make_charts.py --lobby contested --outdir output-contested
+```
 
 **Auto-updating.** `.github/workflows/publish.yml` rebuilds and deploys to GitHub
 Pages daily. Both Pages and Actions are free for public repositories. To make it

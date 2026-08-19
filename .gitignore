@@ -1,4 +1,5 @@
 site/
 output/
+output-contested/
 __pycache__/
 *.pyc

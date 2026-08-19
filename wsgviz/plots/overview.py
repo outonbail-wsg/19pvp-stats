@@ -265,7 +265,10 @@ def participation(ctx: Ctx):
     h = top - bottom - xb - 0.05
 
     ax1 = fig.add_axes([0.055, bottom + xb, 0.38, h])
-    bins = np.array([1, 2, 3, 5, 10, 20, 40, 80, 160, games.max() + 1])
+    # Doubling buckets, cut to the data: on a smaller slice nobody may reach the
+    # upper edges, and a bin list that stops rising is an error, not a bin.
+    edges = [e for e in (1, 2, 3, 5, 10, 20, 40, 80, 160) if e <= games.max()]
+    bins = np.array(edges + [games.max() + 1])
     counts, _ = np.histogram(games, bins=bins)
     labels = [f"{int(bins[i])}–{int(bins[i+1]-1)}" if bins[i + 1] - bins[i] > 1
               else f"{int(bins[i])}" for i in range(len(bins) - 1)]

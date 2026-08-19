@@ -22,7 +22,7 @@ from .context import Ctx
 LOG_FIELDS = ["at", "win", "ownCaps", "oppCaps", "seconds", "damageDone",
               "healingDone", "damageOnEFC", "healsOnFC", "flagCaptures",
               "flagReturns", "flagCarryTime", "killingBlows", "deaths",
-              "honorableKills", "deserted"]
+              "honorableKills", "deserted", "contested"]
 
 # Per-character totals worth shipping. Keys stay as the raw column names so the
 # page can look up a label from STAT_LABELS without a second mapping.
@@ -78,6 +78,9 @@ def _game_log(ctx: Ctx) -> dict[int, list[list[int]]]:
     # -1 loss, 0 draw, 1 win, so the log can show a drawn round as such.
     g["win"] = np.where(g["draw"], 0, np.where(g["win"] == 1, 1, -1))
     g["seconds"] = g["timePlayed"]
+    # Lets the page filter the log without shipping a second copy of it.
+    from .context import contested_events
+    g["contested"] = g["eventId"].isin(contested_events(m)).astype(int)
 
     out: dict[int, list[list[int]]] = {}
     frame = g[["playerGuid"] + LOG_FIELDS].fillna(0)
@@ -103,7 +106,8 @@ def _relations(ctx: Ctx, names: pd.Series) -> tuple[dict, dict]:
     return rivals, allies
 
 
-def build_payload(ctx: Ctx, chart_files: list[str] | None = None) -> dict:
+def player_records(ctx: Ctx) -> list[dict]:
+    """One record per character, from whichever slice of matches `ctx` holds."""
     w, tot = ctx.wsg, ctx.totals
     dec = w[~w["draw"]]
 
@@ -113,7 +117,6 @@ def build_payload(ctx: Ctx, chart_files: list[str] | None = None) -> dict:
     last_seen = w.groupby("playerGuid")["ts"].max()
     elo = rating.elo_ratings(dec)
     runs = rating.streaks(dec)
-    log = _game_log(ctx)
     rivals, allies = _relations(ctx, tot["player"])
 
     # Contested vs thin lobby split - the headline comparison of the deck.
@@ -176,6 +179,18 @@ def build_payload(ctx: Ctx, chart_files: list[str] | None = None) -> dict:
         players.append(rec)
 
     players.sort(key=lambda p: -(p["games"] or 0))
+    return players
+
+
+def build_payload(ctx: Ctx, chart_files=None, ctx_contested: Ctx | None = None,
+                  contested_charts=None) -> dict:
+    """The full payload, with a second set of per-character numbers computed
+    from contested lobbies only so the page can switch between them."""
+    w = ctx.wsg
+    dec = w[~w["draw"]]
+    tot = ctx.totals
+    players = player_records(ctx)
+    log = _game_log(ctx)
 
     cls = (dec.dropna(subset=["class_name"])
               .groupby("class_name")
@@ -205,9 +220,11 @@ def build_payload(ctx: Ctx, chart_files: list[str] | None = None) -> dict:
         "classOrder": data.CLASS_ORDER,
         "classes": classes,
         "players": players,
+        "playersContested": player_records(ctx_contested) if ctx_contested else [],
         "logFields": LOG_FIELDS,
         "log": log,
         "charts": chart_files or [],
+        "chartsContested": contested_charts or [],
     }
 
 

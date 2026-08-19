@@ -43,26 +43,33 @@ def main(argv=None) -> int:
     args = parse_args(argv)
     csv_path = args.csv or data.default_csv(ROOT / "Data")
 
+    charts_contested = args.charts.parent / (args.charts.name + "-contested")
     if not args.skip_charts:
         import make_charts
-        rc = make_charts.main(["--csv", str(csv_path), "--outdir", str(args.charts),
-                               "--tz", args.tz, "--min-games", str(args.min_games)])
-        if rc:
-            print("charts failed; aborting", file=sys.stderr)
-            return rc
+        common = ["--csv", str(csv_path), "--tz", args.tz,
+                  "--min-games", str(args.min_games)]
+        for outdir, lobby in ((args.charts, "all"), (charts_contested, "contested")):
+            rc = make_charts.main(common + ["--outdir", str(outdir), "--lobby", lobby])
+            if rc:
+                print(f"charts failed for lobby={lobby}; aborting", file=sys.stderr)
+                return rc
 
     theme.apply_theme()
     ctx = context.build(csv_path, args.outdir, tz=args.tz, min_games=args.min_games)
+    ctx_contested = context.build(csv_path, args.outdir, tz=args.tz,
+                                  min_games=args.min_games, lobby="contested")
 
     site = args.outdir
-    charts_out = site / "charts"
-    charts_out.mkdir(parents=True, exist_ok=True)
-    names = []
-    for png in sorted(args.charts.glob("*.png")):
-        shutil.copy2(png, charts_out / png.name)
-        names.append(png.name)
+    names, contested_names = [], []
+    for src, sub, sink in ((args.charts, "charts", names),
+                           (charts_contested, "charts-contested", contested_names)):
+        target = site / sub
+        target.mkdir(parents=True, exist_ok=True)
+        for png in sorted(src.glob("*.png")):
+            shutil.copy2(png, target / png.name)
+            sink.append(png.name)
 
-    payload = webexport.build_payload(ctx, names)
+    payload = webexport.build_payload(ctx, names, ctx_contested, contested_names)
     webexport.write_payload(payload, site / "stats.json")
 
     # Inline the data so the page also works from file:// - a browser blocks
@@ -79,10 +86,10 @@ def main(argv=None) -> int:
     (site / ".nojekyll").write_text("", encoding="utf-8")
 
     size = (site / "index.html").stat().st_size / 1024
-    print(f"\nSite    : {site}")
-    print(f"Charts  : {len(names)} images")
-    print(f"Players : {len(payload['players'])}")
-    print(f"Page    : index.html, {size:.0f} KB with data inlined")
+    print(f"\nSite      : {site}")
+    print(f"Charts    : {len(names)} all-lobby, {len(contested_names)} contested")
+    print(f"Players   : {len(payload['players'])}")
+    print(f"Page      : index.html, {size:.0f} KB with data inlined")
     return 0
 
 

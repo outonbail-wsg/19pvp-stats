@@ -72,6 +72,28 @@
   .pill{display:inline-block;padding:1px 7px;border-radius:999px;font-size:12px;
         background:var(--accent-soft);color:#1c5cab}
 
+  /* ---- lobby switch ---- */
+  .switch{display:flex;align-items:center;gap:9px;margin-top:12px;font-size:14px;
+          color:var(--ink2);cursor:pointer;user-select:none}
+  .switch input{width:17px;height:17px;accent-color:var(--accent);cursor:pointer}
+  .scope{display:inline-block;margin-left:8px;padding:2px 9px;border-radius:999px;
+         font-size:12px;background:var(--accent-soft);color:#1c5cab;vertical-align:2px}
+
+  /* ---- lightbox ---- */
+  .lb{position:fixed;inset:0;background:rgba(11,11,11,.92);z-index:50;
+      display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .lb img{max-width:94vw;max-height:84vh;object-fit:contain;background:var(--surface);
+          border-radius:6px}
+  .lb .cap{color:#e8e8e4;font-size:14px;margin-top:12px}
+  .lb .cap b{color:#fff;font-weight:600}
+  .lb button{position:absolute;background:rgba(255,255,255,.12);color:#fff;
+             border:0;border-radius:8px;font-size:26px;line-height:1;
+             padding:14px 18px;cursor:pointer}
+  .lb button:hover{background:rgba(255,255,255,.24)}
+  .lb .prev{left:2vw} .lb .next{right:2vw}
+  .lb .close{top:2vh;right:2vw;font-size:20px;padding:9px 14px}
+  @media(max-width:640px){.lb button{font-size:20px;padding:10px 13px}}
+
   /* ---- chart gallery ---- */
   .gal{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
   .gal figure{margin:0;background:var(--surface);border:1px solid var(--grid);
@@ -96,6 +118,10 @@
       <button id="go">Show stats</button>
     </div>
     <div class="hits" id="hits"></div>
+    <label class="switch">
+      <input type="checkbox" id="allLobbies">
+      <span>Include lobbies the bots filled</span>
+    </label>
     <p class="muted" id="searchNote" style="margin:10px 0 0"></p>
   </div>
 
@@ -111,9 +137,23 @@
 <script id="payload" type="application/json">__DATA__</script>
 <script>
 const DATA = JSON.parse(document.getElementById("payload").textContent);
-const P = DATA.players, META = DATA.meta;
+const META = DATA.meta;
 const SEC = new Set(DATA.secondsStats);
 const LBL = DATA.statLabels;
+
+/* Contested lobbies are the default view: a match the bots had to fill is not
+   the game most people mean when they compare themselves to others. The switch
+   brings the rest back. P, QUAL and the chart list all follow it. */
+const HAS_CONTESTED = (DATA.playersContested || []).length > 0;
+let allLobbies = false;
+let P = [], QUAL = [], CHARTS = [];
+function applyScope(){
+  const contested = HAS_CONTESTED && !allLobbies;
+  P = contested ? DATA.playersContested : DATA.players;
+  QUAL = P.filter(p => p.games >= META.minGames);
+  CHARTS = contested && DATA.chartsContested.length
+         ? DATA.chartsContested : DATA.charts;
+}
 
 /* ---------- formatting ---------- */
 const nf = new Intl.NumberFormat("en-US");
@@ -141,7 +181,6 @@ function readable(hex){
 }
 
 /* ---------- ranking helpers ---------- */
-const QUAL = P.filter(p => p.games >= META.minGames);
 function rankOf(player, get, pool){
   const vals = pool.map(get).filter(v => v != null);
   const mine = get(player);
@@ -158,15 +197,24 @@ const classPool = c => QUAL.filter(p => p.class === c);
 /* ---------- game log ---------- */
 const LF = {};
 DATA.logFields.forEach((f, i) => LF[f] = i);
-const logOf = p => (DATA.log[p.id] || DATA.log[String(p.id)] || []);
+function logOf(p){
+  const rows = DATA.log[p.id] || DATA.log[String(p.id)] || [];
+  return (HAS_CONTESTED && !allLobbies) ? rows.filter(r => r[LF.contested]) : rows;
+}
 const dateOf = sec => new Date(sec * 1000)
   .toLocaleDateString("en-GB", {day:"2-digit", month:"short"});
 
 /* ---------- search ---------- */
 const q = document.getElementById("q"), hits = document.getElementById("hits");
-document.getElementById("searchNote").textContent =
-  `${META.characters} characters recorded. Averages and ranks use the ${QUAL.length} `
-  + `with at least ${META.minGames} matches.`;
+function updateNote(){
+  const scope = (HAS_CONTESTED && !allLobbies)
+    ? `Contested lobbies only — both teams fielded ${META.contestedPerTeam}+ real `
+      + `players. Tick the box above to include the rest.`
+    : `All lobbies, including those the bots filled.`;
+  document.getElementById("searchNote").textContent =
+    `${scope} ${P.length} characters in view; averages and ranks use the `
+    + `${QUAL.length} with at least ${META.minGames} matches.`;
+}
 
 function matches(term){
   term = term.trim().toLowerCase();
@@ -295,6 +343,8 @@ function show(p){
       <div class="who">
         <span class="nm" style="color:${col}">${p.name}</span>
         <span class="muted">${p.class || "class unknown"}</span>
+        <span class="scope">${(HAS_CONTESTED && !allLobbies)
+          ? "contested lobbies" : "all lobbies"}</span>
       </div>
       <div class="tiles">
         ${tiles.map(([v,k,s]) => `<div class="tile"><div class="v">${v}</div>
@@ -404,6 +454,7 @@ function show(p){
       <div class="logwrap" id="logwrap"></div>
     </div>`;
   renderLog(log);
+  el.dataset.player = p.name;
   el.classList.remove("hidden");
   el.scrollIntoView({behavior:"smooth", block:"start"});
 }
@@ -455,20 +506,102 @@ function drawLog(){
 
 /* ---------- report gallery ---------- */
 const gal = document.getElementById("gal");
-if (DATA.charts.length){
-  DATA.charts.forEach(f => {
-    const label = f.replace(/^\d+_/, "").replace(/\.png$/, "").replace(/_/g, " ");
-    gal.insertAdjacentHTML("beforeend",
-      `<figure><a href="charts/${f}" target="_blank" rel="noopener">
-         <img loading="lazy" src="charts/${f}" alt="${label}">
-         <figcaption>${label}</figcaption></a></figure>`);
+const chartLabel = f => f.replace(/^\d+_/, "").replace(/\.png$/, "").replace(/_/g, " ");
+const chartDir = () => (HAS_CONTESTED && !allLobbies && DATA.chartsContested.length)
+                       ? "charts-contested" : "charts";
+function renderGallery(){
+  if (!CHARTS.length){
+    gal.innerHTML = `<p class="muted">No chart images alongside this file.</p>`;
+    return;
+  }
+  const dir = chartDir();
+  gal.innerHTML = CHARTS.map((f, i) =>
+    `<figure><a href="#" data-i="${i}">
+       <img loading="lazy" src="${dir}/${f}" alt="${chartLabel(f)}">
+       <figcaption>${chartLabel(f)}</figcaption></a></figure>`).join("");
+  gal.querySelectorAll("a").forEach(a => a.onclick = e => {
+    e.preventDefault(); openLightbox(+a.dataset.i);
   });
-} else {
-  gal.innerHTML = `<p class="muted">No chart images alongside this file.</p>`;
 }
+
+/* ---------- lightbox: click a chart, then arrow through the set ---------- */
+let lbIndex = 0, lbEl = null;
+function openLightbox(i){
+  lbIndex = i;
+  if (!lbEl){
+    lbEl = document.createElement("div");
+    lbEl.className = "lb";
+    lbEl.innerHTML = `<img alt=""><div class="cap"></div>
+      <button class="prev" aria-label="Previous chart">‹</button>
+      <button class="next" aria-label="Next chart">›</button>
+      <button class="close" aria-label="Close">✕</button>`;
+    lbEl.querySelector(".prev").onclick = e => { e.stopPropagation(); stepLightbox(-1); };
+    lbEl.querySelector(".next").onclick = e => { e.stopPropagation(); stepLightbox(1); };
+    lbEl.querySelector(".close").onclick = closeLightbox;
+    // Clicking the backdrop closes; clicking the image itself must not.
+    lbEl.onclick = e => { if (e.target === lbEl) closeLightbox(); };
+    lbEl.querySelector("img").onclick = () => stepLightbox(1);
+    document.body.appendChild(lbEl);
+  }
+  lbEl.style.display = "flex";
+  document.body.style.overflow = "hidden";
+  drawLightbox();
+}
+function drawLightbox(){
+  const f = CHARTS[lbIndex];
+  lbEl.querySelector("img").src = `${chartDir()}/${f}`;
+  lbEl.querySelector(".cap").innerHTML =
+    `<b>${chartLabel(f)}</b> — ${lbIndex + 1} of ${CHARTS.length}`;
+}
+function stepLightbox(d){
+  lbIndex = (lbIndex + d + CHARTS.length) % CHARTS.length;   // wraps both ways
+  drawLightbox();
+}
+function closeLightbox(){
+  if (lbEl) lbEl.style.display = "none";
+  document.body.style.overflow = "";
+}
+document.addEventListener("keydown", e => {
+  if (!lbEl || lbEl.style.display === "none") return;
+  if (e.key === "ArrowRight") stepLightbox(1);
+  else if (e.key === "ArrowLeft") stepLightbox(-1);
+  else if (e.key === "Escape") closeLightbox();
+});
+// Swipe on touch devices.
+let touchX = null;
+document.addEventListener("touchstart", e => {
+  if (lbEl && lbEl.style.display !== "none") touchX = e.changedTouches[0].clientX;
+}, {passive: true});
+document.addEventListener("touchend", e => {
+  if (touchX == null) return;
+  const dx = e.changedTouches[0].clientX - touchX;
+  if (Math.abs(dx) > 45) stepLightbox(dx < 0 ? 1 : -1);
+  touchX = null;
+}, {passive: true});
 
 document.getElementById("period").textContent =
   `${META.matches} matches · ${META.characters} characters · ${META.periodLabel}`;
+/* ---------- the lobby switch ---------- */
+const box = document.getElementById("allLobbies");
+if (!HAS_CONTESTED) box.closest(".switch").style.display = "none";
+box.onchange = () => {
+  allLobbies = box.checked;
+  applyScope();
+  updateNote();
+  renderGallery();
+  closeLightbox();
+  // Redraw whatever character is on screen, now from the other slice.
+  const shown = document.getElementById("card").dataset.player;
+  if (shown){
+    const p = P.find(x => x.name === shown);
+    if (p) show(p); else document.getElementById("card").classList.add("hidden");
+  }
+};
+
+applyScope();
+updateNote();
+renderGallery();
+
 document.getElementById("foot").textContent =
   `Source: 19pvp export ${META.source} · generated ${META.generated}. `
   + `Bots are not in the export, so recorded players are the real ones.`;
