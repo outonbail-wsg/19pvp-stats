@@ -13,7 +13,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from . import data, rating
+from . import data, descriptions, rating
 from .context import Ctx
 
 # One match of one character, as a fixed array of integers. Field names travel
@@ -189,6 +189,13 @@ def player_records(ctx: Ctx, split: pd.DataFrame) -> list[dict]:
     return players
 
 
+def _chart_info(*file_lists) -> dict:
+    """Gallery title and blurb for every chart that is actually shipped."""
+    stems = {f.rsplit(".", 1)[0] for files in file_lists for f in (files or [])}
+    return {s: {"title": descriptions.title(s), "blurb": descriptions.blurb(s)}
+            for s in sorted(stems)}
+
+
 def build_payload(ctx: Ctx, chart_files=None, ctx_contested: Ctx | None = None,
                   contested_charts=None) -> dict:
     """The full payload, with a second set of per-character numbers computed
@@ -234,6 +241,9 @@ def build_payload(ctx: Ctx, chart_files=None, ctx_contested: Ctx | None = None,
         "log": log,
         "charts": chart_files or [],
         "chartsContested": contested_charts or [],
+        # Title and explanation per chart, keyed by file stem. The gallery shows
+        # the image without its own title until it is opened, so it needs both.
+        "chartInfo": _chart_info(chart_files, contested_charts),
     }
 
 

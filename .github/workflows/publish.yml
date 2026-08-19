@@ -60,7 +60,13 @@ jobs:
             echo "LEADERBOARD_CSV_URL is not set; using the committed CSV."
           fi
 
-      - run: python make_web.py
+      # Optional: set the repository variable GOATCOUNTER_URL to a GoatCounter
+      # endpoint (https://NAME.goatcounter.com/count) and the page counts visits
+      # and character views. Without it no analytics script is emitted at all.
+      - name: Build the site
+        env:
+          GOATCOUNTER_URL: ${{ vars.GOATCOUNTER_URL }}
+        run: python make_web.py
 
       - uses: actions/upload-pages-artifact@v3
         with:

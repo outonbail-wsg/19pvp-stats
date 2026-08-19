@@ -49,8 +49,8 @@ def power_ranking(ctx: Ctx):
         f"Top {TABLE_ROWS} by opponent-adjusted rating, characters with at least "
         f"{ctx.min_games} matches")
     bottom = T.footnote(fig, ctx.source_note(
-        "Every character starts at 1500. After each match both sides move by the same "
-        "amount, more when the result was unexpected. Unlike a raw win rate this "
+        f"Every character starts at {rating.ELO_START:.0f}. After each match both sides "
+        "move by the same amount, more when the result was unexpected. Unlike a raw win rate this "
         "accounts for who was on the other side, so a record built against weak "
         "opposition is worth less. Bots are unrated and absent, so a thin lobby counts "
         "the same as a full one."))
@@ -134,17 +134,19 @@ def capture_race(ctx: Ctx):
 
 
 def class_boards(ctx: Ctx):
-    """The best of each class - a board every player can find themselves on."""
+    """Top of each class by rating - a board every player can find themselves on."""
     q = _qualified(ctx).dropna(subset=["class_name"])
     present = [c for c in CLASS_ORDER if (q["class_name"] == c).sum() >= 3]
 
     fig = plt.figure(figsize=(13.5, 8.6))
     top = T.figure_title(
-        fig, "Best of each class",
+        fig, "Highest power rating by class",
         f"Top characters per class by power rating, at least {ctx.min_games} matches")
     bottom = T.footnote(fig, ctx.source_note(
-        "Classes with fewer than three qualified characters are left out. The rating is "
-        "the same opponent-adjusted one as the power ranking."))
+        f"Power rating is an Elo: everyone starts at {rating.ELO_START:.0f} and after each "
+        "match the winning side takes points from the losing side, more when it was the "
+        "lower-rated one. Each side is rated by the mean of its recorded players. Classes "
+        "with fewer than three qualified characters are left out."))
     axes = H.grid_axes(fig, 3, 3, left=0.075, right=0.975, top=top,
                        bottom=bottom, wspace=0.75, hspace=0.55)
 

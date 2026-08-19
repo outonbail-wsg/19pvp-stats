@@ -108,7 +108,7 @@ pip install -r requirements.txt
 |---|------|-------|
 | 40 | power_ranking | standings table by opponent-adjusted rating (Elo) |
 | 41 | capture_race | cumulative captures over the period |
-| 42 | class_boards | best characters of each class |
+| 42 | class_boards | highest power rating per class |
 
 ### Conventions
 
@@ -172,7 +172,8 @@ Builds `site/` — a static folder with no backend and no running costs:
 - `index.html` — player search plus the full chart gallery. The data is **inlined**,
   so the file works opened by double-click, served from GitHub Pages, or copied to
   any static host. No `fetch`, no CORS, no database. Click a chart to open it full
-  size and arrow (or swipe) through the set.
+  size and arrow (or swipe) through the set; each one carries a short explanation
+  from `wsgviz/descriptions.py`, which the build checks for gaps.
 - `charts/` and `charts-contested/` — the PNGs, rendered twice
 - `stats.json` — the same aggregates as a standalone file, for anyone who wants them
 
@@ -199,6 +200,19 @@ endpoint; without it the workflow just rebuilds from the CSV in `Data/`.
 
 To publish: push to a public repo, then Settings → Pages → Source: *GitHub Actions*.
 
+**Linkable characters.** A character view has its own address, `…/#/c/Name`, so a
+player can bookmark their page or post it. A link that points at someone with no
+matches in the current slice flips the lobby switch rather than showing an empty
+card.
+
+**Visitor counting (optional).** Set a repository variable `GOATCOUNTER_URL` to a
+[GoatCounter](https://www.goatcounter.com) endpoint (`https://NAME.goatcounter.com/count`)
+and the build emits the counting script; the page then also reports each character
+view as `/c/Name`, so the dashboard shows which characters get read. Without the
+variable no analytics script is emitted and the page contacts nobody. The endpoint
+is only ever read from the environment, never committed. GoatCounter sets no
+cookies, so no consent banner is needed.
+
 ## Layout of the code
 
 ```
@@ -206,6 +220,7 @@ wsgviz/
   theme.py          design system: palette, number formatting, title/footnote/axis-band layout
   data.py           load + clean + enrich; stat metadata; class names/colours; aggregation
   context.py        Ctx: one precomputed data bundle shared by every chart
+  descriptions.py   gallery title and explanation per chart, in one place
   plots/
     helpers.py      reusable marks: top-N bars, diverging bars, histograms, radar, class colours/legend
     overview.py     01, 03–07   scope of the dataset and when it is played

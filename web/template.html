@@ -84,7 +84,9 @@
       display:flex;flex-direction:column;align-items:center;justify-content:center}
   .lb img{max-width:94vw;max-height:84vh;object-fit:contain;background:var(--surface);
           border-radius:6px}
-  .lb .cap{color:#e8e8e4;font-size:14px;margin-top:12px}
+  .lb .cap{color:#e8e8e4;font-size:14px;margin-top:12px;max-width:900px;
+           text-align:center;line-height:1.5}
+  .lb .cap span{display:block;margin-top:4px;color:#b9b9b3;font-size:13px}
   .lb .cap b{color:#fff;font-weight:600}
   .lb button{position:absolute;background:rgba(255,255,255,.12);color:#fff;
              border:0;border-radius:8px;font-size:26px;line-height:1;
@@ -99,7 +101,10 @@
   .gal figure{margin:0;background:var(--surface);border:1px solid var(--grid);
               border-radius:var(--radius);overflow:hidden}
   .gal img{width:100%;display:block;background:var(--surface)}
-  .gal figcaption{padding:8px 12px;font-size:13px;color:var(--ink2)}
+  .gal figcaption{padding:10px 12px 12px}
+  .gal figcaption b{display:block;font-size:14px;font-weight:600;color:var(--ink)}
+  .gal figcaption span{display:block;margin-top:3px;font-size:12.5px;line-height:1.45;
+                       color:var(--ink2)}
   .gal a{text-decoration:none;color:inherit}
   details summary{cursor:pointer;font-size:15px;color:var(--accent);margin-bottom:12px}
   .hidden{display:none}
@@ -225,19 +230,19 @@ function renderHits(){
   const list = matches(q.value);
   hits.innerHTML = "";
   if (list.length === 1 && list[0].name.toLowerCase() === q.value.trim().toLowerCase()){
-    show(list[0]); return;
+    openPlayer(list[0]); return;
   }
   list.forEach(p => {
     const b = document.createElement("button");
     b.className = "hit"; b.textContent = `${p.name} · ${p.class || "?"} · ${p.games} matches`;
     b.style.color = readable(classColor(p.class));
-    b.onclick = () => { q.value = p.name; hits.innerHTML = ""; show(p); };
+    b.onclick = () => { q.value = p.name; hits.innerHTML = ""; openPlayer(p); };
     hits.appendChild(b);
   });
 }
 q.addEventListener("input", renderHits);
 q.addEventListener("keydown", e => { if (e.key === "Enter"){ const l = matches(q.value);
-  if (l.length){ q.value = l[0].name; hits.innerHTML = ""; show(l[0]); } } });
+  if (l.length){ q.value = l[0].name; hits.innerHTML = ""; openPlayer(l[0]); } } });
 document.getElementById("go").onclick = () => { const l = matches(q.value);
   if (l.length){ q.value = l[0].name; hits.innerHTML = ""; show(l[0]); } };
 
@@ -506,7 +511,12 @@ function drawLog(){
 
 /* ---------- report gallery ---------- */
 const gal = document.getElementById("gal");
-const chartLabel = f => f.replace(/^\d+_/, "").replace(/\.png$/, "").replace(/_/g, " ");
+const chartStem = f => f.replace(/\.png$/, "");
+const chartInfo = f => (DATA.chartInfo || {})[chartStem(f)] || {};
+// Falls back to the file name so a chart added without a description still shows.
+const chartLabel = f => chartInfo(f).title
+                     || f.replace(/^\d+_/, "").replace(/\.png$/, "").replace(/_/g, " ");
+const chartBlurb = f => chartInfo(f).blurb || "";
 const chartDir = () => (HAS_CONTESTED && !allLobbies && DATA.chartsContested.length)
                        ? "charts-contested" : "charts";
 function renderGallery(){
@@ -518,7 +528,8 @@ function renderGallery(){
   gal.innerHTML = CHARTS.map((f, i) =>
     `<figure><a href="#" data-i="${i}">
        <img loading="lazy" src="${dir}/${f}" alt="${chartLabel(f)}">
-       <figcaption>${chartLabel(f)}</figcaption></a></figure>`).join("");
+       <figcaption><b>${chartLabel(f)}</b><span>${chartBlurb(f)}</span></figcaption>
+     </a></figure>`).join("");
   gal.querySelectorAll("a").forEach(a => a.onclick = e => {
     e.preventDefault(); openLightbox(+a.dataset.i);
   });
@@ -551,7 +562,8 @@ function drawLightbox(){
   const f = CHARTS[lbIndex];
   lbEl.querySelector("img").src = `${chartDir()}/${f}`;
   lbEl.querySelector(".cap").innerHTML =
-    `<b>${chartLabel(f)}</b> — ${lbIndex + 1} of ${CHARTS.length}`;
+    `<b>${chartLabel(f)}</b> — ${lbIndex + 1} of ${CHARTS.length}` +
+    (chartBlurb(f) ? `<span>${chartBlurb(f)}</span>` : "");
 }
 function stepLightbox(d){
   lbIndex = (lbIndex + d + CHARTS.length) % CHARTS.length;   // wraps both ways
@@ -598,13 +610,70 @@ box.onchange = () => {
   }
 };
 
+/* ---------- deep links: #/c/Name ----------
+   A character view is a page in its own right: linkable, bookmarkable, and
+   countable. Without this the whole site is one URL and no analytics can tell
+   a visitor who read one character from one who read thirty. */
+const charHash = name => "#/c/" + encodeURIComponent(name);
+// The address bar needs percent-encoding; the analytics dashboard does not, and
+// "/c/Téch (Priest)" reads better there than "/c/T%C3%A9ch%20(Priest)".
+const charPath = name => "/c/" + name.replace(/\//g, "-");
+
+function countView(path, title){
+  // No-op until an analytics script is configured at build time.
+  if (window.goatcounter && window.goatcounter.count)
+    window.goatcounter.count({path: path, title: title, event: false});
+}
+
+function nameFromHash(){
+  const h = location.hash.replace(/^#/, "");
+  if (!h.startsWith("/c/")) return "";
+  try { return decodeURIComponent(h.slice(3)); } catch (e) { return h.slice(3); }
+}
+
+function openPlayer(p){
+  const hash = charHash(p.name);
+  if (location.hash !== hash) history.pushState(null, "", hash);
+  show(p);
+  countView(charPath(p.name), p.name);
+}
+
+function route(){
+  const name = nameFromHash();
+  const card = document.getElementById("card");
+  if (!name){ card.classList.add("hidden"); return; }
+
+  let p = P.find(x => x.name === name);
+  if (!p && HAS_CONTESTED){
+    // A link can point at someone with no matches in the current slice - a
+    // character who never played a contested lobby. Follow the link rather
+    // than showing nothing, and move the switch so the view stays honest.
+    const other = (allLobbies ? DATA.playersContested : DATA.players);
+    if (other.some(x => x.name === name)){
+      box.checked = allLobbies = !allLobbies;
+      applyScope(); updateNote(); renderGallery();
+      p = P.find(x => x.name === name);
+    }
+  }
+  if (!p){ card.classList.add("hidden"); return; }
+  if (card.dataset.player === p.name && !card.classList.contains("hidden")) return;
+  q.value = p.name;
+  hits.innerHTML = "";
+  show(p);
+  countView(charPath(p.name), p.name);
+}
+
+window.addEventListener("hashchange", route);
+
 applyScope();
 updateNote();
 renderGallery();
+route();
 
 document.getElementById("foot").textContent =
   `Source: 19pvp export ${META.source} · generated ${META.generated}. `
   + `Bots are not in the export, so recorded players are the real ones.`;
 </script>
+<!--ANALYTICS-->
 </body>
 </html>

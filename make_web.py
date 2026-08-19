@@ -11,19 +11,22 @@ into index.html, so the page needs no server and no fetch to show a player card.
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import sys
+from html import escape
 from pathlib import Path
 
 import matplotlib
 
 matplotlib.use("Agg")
 
-from wsgviz import context, data, theme, webexport  # noqa: E402
+from wsgviz import context, data, descriptions, theme, webexport  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent
 TEMPLATE = ROOT / "web" / "template.html"
 PLACEHOLDER = "__DATA__"
+ANALYTICS_SLOT = "<!--ANALYTICS-->"
 
 
 def parse_args(argv=None):
@@ -36,7 +39,26 @@ def parse_args(argv=None):
                    help="do not re-render the PNGs, just reuse them")
     p.add_argument("--tz", default="UTC")
     p.add_argument("--min-games", type=int, default=20)
+    p.add_argument("--analytics", default=os.environ.get("GOATCOUNTER_URL", ""),
+                   help="GoatCounter endpoint, e.g. https://NAME.goatcounter.com/count; "
+                        "taken from GOATCOUNTER_URL when not given. Empty means no script at all.")
     return p.parse_args(argv)
+
+
+def analytics_tag(endpoint: str) -> str:
+    """The visitor-counting script, or nothing at all when none is configured.
+
+    The endpoint lives in an environment variable rather than in the template so
+    it is never committed, and so a build without it produces a page that phones
+    home to nobody.
+    """
+    endpoint = (endpoint or "").strip()
+    if not endpoint:
+        return ""
+    if not endpoint.startswith("https://"):
+        raise SystemExit(f"--analytics must be an https URL, got: {endpoint}")
+    return (f'<script data-goatcounter="{escape(endpoint, quote=True)}" '
+            f'async src="//gc.zgo.at/count.js"></script>')
 
 
 def main(argv=None) -> int:
@@ -81,6 +103,12 @@ def main(argv=None) -> int:
             contested_names.append(src.name)
     contested_names.sort()
 
+    # A chart with no gallery text still renders, but silently as a bare file
+    # name - so say it out loud rather than letting the wording drift.
+    missing = descriptions.check(n.rsplit(".", 1)[0] for n in names)
+    if missing:
+        print(f"no gallery description for: {', '.join(missing)}", file=sys.stderr)
+
     payload = webexport.build_payload(ctx, names, ctx_contested, contested_names)
     webexport.write_payload(payload, site / "stats.json")
 
@@ -93,8 +121,9 @@ def main(argv=None) -> int:
         print(f"template is missing {PLACEHOLDER}", file=sys.stderr)
         return 1
     # </script> inside JSON would close the host tag early.
-    (site / "index.html").write_text(
-        html.replace(PLACEHOLDER, blob.replace("</", "<\\/")), encoding="utf-8")
+    html = html.replace(PLACEHOLDER, blob.replace("</", "<\\/"))
+    html = html.replace(ANALYTICS_SLOT, analytics_tag(args.analytics))
+    (site / "index.html").write_text(html, encoding="utf-8")
     (site / ".nojekyll").write_text("", encoding="utf-8")
 
     size = (site / "index.html").stat().st_size / 1024
