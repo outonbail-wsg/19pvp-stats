@@ -69,6 +69,18 @@ def main(argv=None) -> int:
             shutil.copy2(png, target / png.name)
             sink.append(png.name)
 
+    # The charts that compare contested against bot-filled lobbies exist only in
+    # the all-lobby render - and they are exactly the ones a reader in contested
+    # view most wants. Carry them across so the gallery never loses them; their
+    # own footnotes already say they cover every lobby.
+    import make_charts
+    for name in sorted(make_charts.ALL_LOBBIES_ONLY):
+        src = args.charts / f"{name}.png"
+        if src.exists() and f"{name}.png" not in contested_names:
+            shutil.copy2(src, site / "charts-contested" / src.name)
+            contested_names.append(src.name)
+    contested_names.sort()
+
     payload = webexport.build_payload(ctx, names, ctx_contested, contested_names)
     webexport.write_payload(payload, site / "stats.json")
 

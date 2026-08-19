@@ -17,14 +17,14 @@ from . import icons
 
 TOP_N = 10
 
-FLAG_STATS = ["flagCaptures", "flagReturns", "flagCarryTime", "attemptsOnFlag",
-              "damageOnEFC", "healsOnFC"]
+# flagCaptures, flagReturns, damageOnEFC and healsOnFC have dedicated charts
+# in objective.py, so the tables carry what is left.
+FLAG_STATS = ["flagCarryTime", "attemptsOnFlag"]
 COMBAT_STATS = ["damageDone", "healingDone", "absorbsDone", "killingBlows",
                 "honorableKills", "damageTaken"]
 UTILITY_STATS = ["successfulInterrupts", "fakeCastInterrupts", "dispelsOffensive",
                  "dispelsDefensive", "hardCCDuration", "softCCDuration"]
-RATE_STATS = ["damageDone", "healingDone", "damageOnEFC", "healsOnFC",
-              "flagReturns", "flagCaptures"]
+RATE_STATS = ["damageDone", "healingDone", "damageTaken", "honorableKills"]
 
 
 TABLE_TOP = 5            # names shown per statistic in a leaders table
@@ -189,9 +189,9 @@ def leaderboard_activity(ctx: Ctx):
 
 
 CHARTS = [
-    ("25_leaders_flag_combat", leaderboard_flag),
-    ("26_leaders_utility", leaderboard_utility),
-    ("27_leaders_per_minute", leaderboard_per_minute),
-    ("28_leaderboard_winrate", leaderboard_winrate),
-    ("29_leaderboard_activity", leaderboard_activity),
+    ("26_leaders_flag_combat", leaderboard_flag),
+    ("27_leaders_utility", leaderboard_utility),
+    ("28_leaders_per_minute", leaderboard_per_minute),
+    ("29_leaderboard_winrate", leaderboard_winrate),
+    ("30_leaderboard_activity", leaderboard_activity),
 ]

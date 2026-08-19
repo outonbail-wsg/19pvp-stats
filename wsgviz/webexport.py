@@ -106,7 +106,26 @@ def _relations(ctx: Ctx, names: pd.Series) -> tuple[dict, dict]:
     return rivals, allies
 
 
-def player_records(ctx: Ctx) -> list[dict]:
+def lobby_split(full: Ctx) -> pd.DataFrame:
+    """Win rate per character in contested and in thin lobbies.
+
+    Always computed from the complete data: it is a comparison between the two
+    kinds of lobby, so it cannot be recomputed inside one of them.
+    """
+    dec = full.wsg[~full.wsg["draw"]]
+    m = full.matches
+    contested = set(m[(m["tracked_team0"] >= data.CONTESTED_PER_TEAM)
+                      & (m["tracked_team1"] >= data.CONTESTED_PER_TEAM)].index)
+    thin = set(m[(m["tracked_team0"] <= data.THIN_PER_TEAM)
+                 & (m["tracked_team1"] <= data.THIN_PER_TEAM)].index)
+    tagged = dec.assign(
+        lobby=np.where(dec["eventId"].isin(contested), "contested",
+                       np.where(dec["eventId"].isin(thin), "thin", "mid")))
+    return (tagged[tagged["lobby"] != "mid"]
+            .groupby(["playerGuid", "lobby"])["win"].agg(["size", "mean"]))
+
+
+def player_records(ctx: Ctx, split: pd.DataFrame) -> list[dict]:
     """One record per character, from whichever slice of matches `ctx` holds."""
     w, tot = ctx.wsg, ctx.totals
     dec = w[~w["draw"]]
@@ -118,18 +137,6 @@ def player_records(ctx: Ctx) -> list[dict]:
     elo = rating.elo_ratings(dec)
     runs = rating.streaks(dec)
     rivals, allies = _relations(ctx, tot["player"])
-
-    # Contested vs thin lobby split - the headline comparison of the deck.
-    m = ctx.matches
-    contested = set(m[(m["tracked_team0"] >= data.CONTESTED_PER_TEAM)
-                      & (m["tracked_team1"] >= data.CONTESTED_PER_TEAM)].index)
-    thin = set(m[(m["tracked_team0"] <= data.THIN_PER_TEAM)
-                 & (m["tracked_team1"] <= data.THIN_PER_TEAM)].index)
-    lobby = dec.assign(
-        lobby=np.where(dec["eventId"].isin(contested), "contested",
-                       np.where(dec["eventId"].isin(thin), "thin", "mid")))
-    split = (lobby[lobby["lobby"] != "mid"]
-             .groupby(["playerGuid", "lobby"])["win"].agg(["size", "mean"]))
 
     players = []
     for guid, row in tot.iterrows():
@@ -189,7 +196,8 @@ def build_payload(ctx: Ctx, chart_files=None, ctx_contested: Ctx | None = None,
     w = ctx.wsg
     dec = w[~w["draw"]]
     tot = ctx.totals
-    players = player_records(ctx)
+    split = lobby_split(ctx)
+    players = player_records(ctx, split)
     log = _game_log(ctx)
 
     cls = (dec.dropna(subset=["class_name"])
@@ -220,7 +228,8 @@ def build_payload(ctx: Ctx, chart_files=None, ctx_contested: Ctx | None = None,
         "classOrder": data.CLASS_ORDER,
         "classes": classes,
         "players": players,
-        "playersContested": player_records(ctx_contested) if ctx_contested else [],
+        "playersContested": (player_records(ctx_contested, split)
+                             if ctx_contested else []),
         "logFields": LOG_FIELDS,
         "log": log,
         "charts": chart_files or [],

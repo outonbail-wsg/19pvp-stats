@@ -213,8 +213,8 @@ def deserter_ranking(ctx: Ctx):
 
 
 CHARTS = [
-    ("17_win_vs_loss", win_vs_loss),
-    ("18_winrate_by_stat", winrate_by_stat),
-    ("19_desertion", desertion),
-    ("20_deserter_ranking", deserter_ranking),
+    ("18_win_vs_loss", win_vs_loss),
+    ("19_winrate_by_stat", winrate_by_stat),
+    ("20_desertion", desertion),
+    ("21_deserter_ranking", deserter_ranking),
 ]

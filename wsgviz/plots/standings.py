@@ -87,61 +87,6 @@ def power_ranking(ctx: Ctx):
     return fig
 
 
-def form_board(ctx: Ctx):
-    """Recent results as a strip per character - a football-style form guide."""
-    dec = ctx.wsg[~ctx.wsg["draw"]].sort_values("at")
-    tot = ctx.totals
-    order = tot.nlargest(FORM_PLAYERS, "games").index
-
-    fig = plt.figure(figsize=(12.5, 7.6))
-    top = T.figure_title(
-        fig, "Recent form",
-        f"Last {FORM_MATCHES} results of the {FORM_PLAYERS} most active characters, "
-        "oldest on the left")
-    bottom = T.footnote(fig, ctx.source_note(
-        "Green is a win, red a loss. Characters with fewer than "
-        f"{FORM_MATCHES} decided matches show a shorter strip."))
-    ax = fig.add_axes([0.155, bottom, 0.80, top - bottom])
-
-    for row, guid in enumerate(order):
-        g = dec[dec["playerGuid"] == guid].tail(FORM_MATCHES)
-        wins = g["win"].to_numpy()
-        # Right-align so the newest result of every character shares a column.
-        offset = FORM_MATCHES - len(wins)
-        for i, v in enumerate(wins):
-            ax.add_patch(plt.Rectangle(
-                (offset + i + 0.12, row + 0.12), 0.76, 0.76,
-                facecolor=WIN_COLOR if v == 1 else LOSS_COLOR, linewidth=0))
-            # Green against red is the one pair red-green colour blindness cannot
-            # separate, so the letter carries the result too.
-            ax.text(offset + i + 0.5, row + 0.5, "W" if v == 1 else "L",
-                    ha="center", va="center", fontsize=7, fontweight="semibold",
-                    color=T.SURFACE)
-        rate = wins.mean() if len(wins) else 0
-        ax.text(FORM_MATCHES + 0.5, row + 0.5, f"{rate*100:.0f} %", va="center",
-                ha="left", fontsize=9, color=T.INK_SECONDARY)
-
-    names = [tot.loc[g, "player"] for g in order]
-    ax.set_yticks(np.arange(len(order)) + 0.5)
-    ax.set_yticklabels(names, fontsize=9.5)
-    for tick, c in zip(ax.get_yticklabels(),
-                       H.class_text_colors(tot.loc[order, "class_name"])):
-        tick.set_color(c)
-    ax.set_xlim(0, FORM_MATCHES + 2.6)
-    ax.set_ylim(len(order), 0)
-    ax.set_xticks([])
-    ax.grid(False)
-    for side in ("top", "right", "left", "bottom"):
-        ax.spines[side].set_visible(False)
-    ax.tick_params(length=0)
-    ax.text(FORM_MATCHES + 0.5, -0.35, "win rate", fontsize=8.5,
-            color=T.INK_MUTED, ha="left", va="center")
-    ax.text(0, -0.35, "older", fontsize=8.5, color=T.INK_MUTED, va="center")
-    ax.text(FORM_MATCHES, -0.35, "newer", fontsize=8.5, color=T.INK_MUTED,
-            ha="right", va="center")
-    return fig
-
-
 def capture_race(ctx: Ctx):
     """Cumulative captures over the period - the deck's only running total."""
     w = ctx.wsg
@@ -217,7 +162,6 @@ def class_boards(ctx: Ctx):
 
 CHARTS = [
     ("40_power_ranking", power_ranking),
-    ("41_form_board", form_board),
-    ("42_capture_race", capture_race),
-    ("43_class_boards", class_boards),
+    ("41_capture_race", capture_race),
+    ("42_class_boards", class_boards),
 ]

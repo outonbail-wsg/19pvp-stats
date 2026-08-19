@@ -10,8 +10,7 @@ profiles and a short arena companion.
 python make_charts.py
 ```
 
-Charts land in `output/` (41 PNGs, numbered `01_…` to `43_…`; three numbers were
-freed when bar grids were merged into tables). The script
+Charts land in `output/` as 42 PNGs, numbered `01_…` to `42_…`. The script
 picks the newest `leaderboard-raw-*.csv` in `Data/` automatically.
 
 Options:
@@ -31,7 +30,7 @@ pip install -r requirements.txt
 
 ## The charts
 
-41 charts, numbered in reading order.
+42 charts, numbered in reading order.
 
 **The bracket** — how big the scene is and when it is alive
 | # | File | Shows |
@@ -45,52 +44,71 @@ pip install -r requirements.txt
 | 07 | activity_per_day | matches per day per mode |
 
 **Classes** (official WoW class colours throughout)
-| 08 | class_distribution | characters and player-matches per class |
+| # | File | Shows |
+|---|------|-------|
+| 08 | class_distribution | characters and player-matches per class, ranked |
 | 09 | class_meta | popularity vs win rate on one panel |
 | 10 | team_composition | what a typical team is made of |
 | 11 | class_winrate | win rate per class with Wilson interval |
 | 12 | class_matrix | all classes × nine statistics, shaded within each column |
 
+**The objective** — the two things a Warsong match is actually about
+| # | File | Shows |
+|---|------|-------|
+| 13 | flag_leaders | captures and returns: total, per match, per minute |
+| 14 | carrier_leaders | damage on the enemy carrier, healing on your own, same three ways |
+
 **Matches and what wins them**
-| 14 | match_length | match-length distribution |
-| 15 | final_score | how the round ended and on what score |
-| 16 | humans_vs_bots | humans per team, and win rate by human advantage |
-| 17 | win_vs_loss | per-minute stats, winners vs losers |
-| 18 | winrate_by_stat | win rate by performance quintile |
-| 19 | desertion | what leaving costs |
-| 20 | deserter_ranking | who leaves, by name and by class |
+| # | File | Shows |
+|---|------|-------|
+| 15 | match_length | match-length distribution |
+| 16 | final_score | how the round ended and on what score |
+| 17 | humans_vs_bots | humans per team, and win rate by human advantage |
+| 18 | win_vs_loss | per-minute stats, winners vs losers |
+| 19 | winrate_by_stat | win rate by performance quintile |
+| 20 | desertion | what leaving costs |
+| 21 | deserter_ranking | who leaves, by name and by class |
 
 **Full lobbies** — the least bot-diluted matches
-| 21 | realgames_overview | scope and final score |
-| 22 | realgames_team_compare | winning vs losing team totals (near-complete) |
-| 23 | realgames_length | full-lobby vs rest match length |
-| 24 | contested_record | **win rate in contested vs thin lobbies** |
+| # | File | Shows |
+|---|------|-------|
+| 22 | realgames_overview | scope and final score |
+| 23 | realgames_team_compare | winning vs losing team totals (near-complete) |
+| 24 | realgames_length | full-lobby vs rest match length |
+| 25 | contested_record | **win rate in contested vs thin lobbies** |
 
 **Player leaderboards** (bars and names coloured by class)
-| 25 | leaders_flag_combat | leaders table, 12 flag and combat statistics |
-| 26 | leaders_utility | leaders table, 9 utility statistics |
-| 27 | leaders_per_minute | leaders table, 9 rates per minute |
-| 28 | leaderboard_winrate | best win rate with an uncertainty band |
-| 29 | leaderboard_activity | most matches / hours / days active |
+| # | File | Shows |
+|---|------|-------|
+| 26 | leaders_flag_combat | leaders table, flag and combat statistics |
+| 27 | leaders_utility | leaders table, utility statistics |
+| 28 | leaders_per_minute | leaders table, rates per minute |
+| 29 | leaderboard_winrate | best win rate with an uncertainty band |
+| 30 | leaderboard_activity | most matches / hours / days active |
 | 31 | role_map | damage vs healing scatter, coloured by class |
 | 32 | player_profiles | player cards: headline numbers plus radar |
 
 **Arena 2v2**
+| # | File | Shows |
+|---|------|-------|
 | 33–35 | 2v2_overview / _leaderboards / _winrate | 2v2 |
 
 3v3 is not charted: 5 matches across 7 characters is too little to read.
 
 **Feature charts**
+| # | File | Shows |
+|---|------|-------|
 | 36 | record_book | best single-match performance per statistic |
 | 37 | rivalries | head-to-head matrix + longest win/losing streaks |
 | 38 | flag_efficiency | pickup→capture conversion + objective focus |
 | 39 | first_match | retention curve by whether the debut was won |
 
-**Standings and form** — sports-page shapes the deck was missing
+**Standings** — sports-page shapes the deck was missing
+| # | File | Shows |
+|---|------|-------|
 | 40 | power_ranking | standings table by opponent-adjusted rating (Elo) |
-| 41 | form_board | last 25 results per character as a W/L strip |
-| 42 | capture_race | cumulative captures over the period |
-| 43 | class_boards | best characters of each class |
+| 41 | capture_race | cumulative captures over the period |
+| 42 | class_boards | best characters of each class |
 
 ### Conventions
 
@@ -120,7 +138,7 @@ Read these before trusting any team- or match-level number.
   queue, and bots are absent from the export. Every real player *is* recorded —
   arena proves it, where all 1,113 2v2 matches carry exactly four rows — so a
   team's recorded players are its complete human side (median 4 of 10 slots).
-  The **full-lobby charts (21–24)** isolate matches with ≥8 real players per team.
+  The **full-lobby charts (22–24)** isolate matches with ≥8 real players per team.
 - **The round timer is 25 minutes.** A match ends on 3 captures *or* when the
   timer expires, so 2–1 and 1–0 are ordinary results — the data shows lengths
   piling up in the last half minute before 25:00 and stopping there. `matches()`
@@ -166,8 +184,9 @@ payload is ~64 KB gzipped for 408 characters.
 players mean when they compare themselves, so the page opens on contested lobbies
 only (`data.CONTESTED_PER_TEAM`+ real players per team) and a checkbox brings the
 rest back. That switch drives everything: the player card, the game log and which
-chart set the gallery shows. Seven charts are about the human/bot split itself and
-exist only in the all-lobby set — see `ALL_LOBBIES_ONLY` in `make_charts.py`.
+chart set the gallery shows. Seven charts compare the two kinds of lobby against
+each other, so they are rendered once from the complete data and appear in both
+galleries unchanged — see `ALL_LOBBIES_ONLY` in `make_charts.py`.
 
 ```bash
 python make_charts.py --lobby contested --outdir output-contested
@@ -189,14 +208,18 @@ wsgviz/
   context.py        Ctx: one precomputed data bundle shared by every chart
   plots/
     helpers.py      reusable marks: top-N bars, diverging bars, histograms, radar, class colours/legend
-    overview.py     charts 01–07
-    match.py        charts 08–11
-    winfactors.py   charts 12–14
-    leaderboards.py charts 15–20
-    classes.py      charts 21–24
-    roles.py        charts 25–27
-    realgames.py    charts 28–30  (full-lobby / near 10v10)
-    arena.py        charts 31–36  (2v2 and 3v3, generated per bracket)
+    overview.py     01, 03–07   scope of the dataset and when it is played
+    bracket.py      02, 09, 10  who plays and in what team shapes
+    classes.py      08, 11, 12  class distribution, win rate, stat matrix
+    objective.py    13, 14      flag and carrier-support boards
+    match.py        15–17       length, score, human/bot split
+    winfactors.py   18–21       what separates wins from losses; desertion
+    realgames.py    22–24       full-lobby / near 10v10
+    leaderboards.py 26–30       per-player boards
+    roles.py        31, 32      role map and player profile cards
+    arena.py        33–35       2v2 (generated per bracket)
+    stories.py      25, 36–39   feature charts
+    standings.py    40–42       Elo table, capture race, per-class boards
 make_charts.py      CLI runner
 ```
 

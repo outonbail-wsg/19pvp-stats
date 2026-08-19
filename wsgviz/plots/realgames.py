@@ -133,7 +133,7 @@ def realgames_length(ctx: Ctx):
 
 
 CHARTS = [
-    ("21_realgames_overview", realgames_overview),
-    ("22_realgames_team_compare", realgames_team_compare),
-    ("23_realgames_length", realgames_length),
+    ("22_realgames_overview", realgames_overview),
+    ("23_realgames_team_compare", realgames_team_compare),
+    ("24_realgames_length", realgames_length),
 ]

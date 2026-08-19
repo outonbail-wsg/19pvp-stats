@@ -40,16 +40,19 @@ def _class_note(w: pd.DataFrame) -> str:
 def class_distribution(ctx: Ctx):
     """How many characters and player-matches per class."""
     w = ctx.wsg
-    order = _present_order(w["class_name"])
-    # Distinct characters per class (one class per character).
+    # Ranked by play volume rather than the fixed class order, and the same
+    # order in both panels so the eye can carry a class across.
+    rows = w["class_name"].value_counts()
+    order = [c for c in rows.index if pd.notna(c)]
     char_cls = ctx.totals.dropna(subset=["class_name"])
     chars = char_cls["class_name"].value_counts().reindex(order).fillna(0)
-    rows = w["class_name"].value_counts().reindex(order).fillna(0)
+    rows = rows.reindex(order).fillna(0)
 
     fig = plt.figure(figsize=(12.5, 6.0))
     top = T.figure_title(
         fig, "WSG class distribution",
-        "Distinct characters and recorded player-matches per class")
+        "Distinct characters and recorded player-matches per class, "
+        "most-played first")
     bottom = T.footnote(fig, ctx.source_note(_class_note(w)))
     xb = T.xband(fig)
     h = top - bottom - xb
