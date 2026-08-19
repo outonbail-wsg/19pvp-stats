@@ -81,8 +81,9 @@ def class_winrate(ctx: Ctx):
         fig, "WSG win rate by class",
         "Share of decided player-matches in the winning team, per class")
     bottom = T.footnote(fig, ctx.source_note(
-        "One row = one player-match, so this also reflects team composition. Thin line "
-        "= 95 % Wilson interval. " + _class_note(w)))
+        "One row = one player-match, so this also reflects team composition. The thin "
+        "line shows how certain each figure is at this number of matches. "
+        + _class_note(w)))
     ax = fig.add_axes([0.13, bottom + 0.04, 0.80, top - bottom - 0.07])
 
     y = np.arange(len(order))[::-1]

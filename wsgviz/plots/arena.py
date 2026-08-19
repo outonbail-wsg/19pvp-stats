@@ -103,7 +103,8 @@ def winrate(ctx: Ctx, kind: str):
         fig, f"{cfg['label']} best win rate",
         f"Top 15 characters with at least {cfg['min_games']} decided matches")
     bottom = T.footnote(fig, ctx.source_note(
-        "Thin line = 95 % Wilson interval. " + _small_sample(a, kind)))
+        "The thin line shows how certain the figure is at this number of games. "
+        + _small_sample(a, kind)))
     ax = fig.add_axes([0.17, bottom + 0.02, 0.73, top - bottom - 0.05])
 
     y = np.arange(len(best))

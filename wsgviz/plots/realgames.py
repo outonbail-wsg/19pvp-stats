@@ -90,8 +90,8 @@ def realgames_team_compare(ctx: Ctx):
         fig, "Full-lobby WSG: winning vs losing team totals",
         "Difference in per-team totals, winning side relative to losing side")
     bottom = T.footnote(fig, ctx.source_note(
-        f"Totals summed per match across {len(full)} full-lobby matches, then averaged. "
-        "Near-complete rather than a sample. Associations, not causal effects."))
+        f"Totals summed per match across {len(full)} full-lobby matches, then "
+        "averaged, so they cover the human side of each team in full."))
     ax = fig.add_axes([0.30, bottom + 0.03, 0.60, top - bottom - 0.06])
 
     H.diverging_hbar(ax, [t[0] for t in rows], [t[1] for t in rows],

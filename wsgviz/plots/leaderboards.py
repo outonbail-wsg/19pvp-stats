@@ -108,8 +108,8 @@ def leaderboard_winrate(ctx: Ctx):
         fig, "WSG best win rate",
         f"Top 15 characters with at least {ctx.min_games} decided matches")
     bottom = T.footnote(fig, ctx.source_note(
-        "Thin line = 95 % Wilson interval - the range the true rate plausibly sits in "
-        "at this sample size."))
+        "The thin line shows how certain the figure is at this number of games - "
+        "where the bands overlap, the order between them is not settled."))
     ax = fig.add_axes([0.16, bottom + 0.02, 0.74, top - bottom - 0.05])
 
     y = np.arange(len(best))

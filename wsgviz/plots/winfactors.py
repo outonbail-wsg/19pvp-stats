@@ -51,7 +51,7 @@ def win_vs_loss(ctx: Ctx):
         "Difference in mean per-minute values, winners relative to losers")
     bottom = T.footnote(fig, ctx.source_note(
         f"{T.num(len(win))} winner vs {T.num(len(lose))} loser rows (>=60 s played, no "
-        "deserters or draws). Associations, not causal effects."))
+        "deserters or draws)."))
     ax = fig.add_axes([0.30, bottom + 0.03, 0.60, top - bottom - 0.06])
 
     H.diverging_hbar(ax, [t[0] for t in rows], [t[1] for t in rows],
@@ -80,7 +80,7 @@ def desertion(ctx: Ctx):
     bottom = T.footnote(fig, ctx.source_note(
         f"{T.num(int(w['deserted'].sum()))} of {T.num(len(w))} rows deserted "
         f"({w['deserted'].mean()*100:.1f} %). Right panel counts only players who "
-        "stayed. Associations, not causal effects."))
+        "stayed."))
     xb = T.xband(fig)
     h = top - bottom - xb
 
