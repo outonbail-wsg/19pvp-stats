@@ -1,0 +1,77 @@
+name: Publish WSG stats
+
+# Rebuilds the charts and the player page, then puts them on GitHub Pages.
+# Free for public repositories: Pages hosting and Actions minutes both cost
+# nothing, and the site is static so there is no server to run.
+
+on:
+  workflow_dispatch:          # run it by hand from the Actions tab
+  schedule:
+    - cron: "17 4 * * *"      # daily, 04:17 UTC
+  push:
+    branches: [main]
+    paths:
+      - "wsgviz/**"
+      - "web/**"
+      - "make_charts.py"
+      - "make_web.py"
+      - ".github/workflows/publish.yml"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      # Fails the run before anything is published if a local path, account
+      # name or personal address slipped into the repository.
+      - name: Check for identity leaks
+        run: python check_privacy.py
+
+      # Optional: set the repository variable LEADERBOARD_CSV_URL to the raw
+      # export endpoint and the site refreshes itself. Without it the workflow
+      # simply rebuilds from whatever CSV is committed under Data/.
+      - name: Fetch the latest export
+        env:
+          CSV_URL: ${{ vars.LEADERBOARD_CSV_URL }}
+        run: |
+          if [ -n "$CSV_URL" ]; then
+            mkdir -p Data
+            out="Data/leaderboard-raw-$(date -u +%Y-%m-%dT%H-%M-%S-000Z).csv"
+            curl -fsSL --retry 3 "$CSV_URL" -o "$out"
+            echo "downloaded $(wc -c < "$out") bytes -> $out"
+          else
+            echo "LEADERBOARD_CSV_URL is not set; using the committed CSV."
+          fi
+
+      - run: python make_web.py
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

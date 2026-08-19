@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Warsong Gulch stats — 19pvp</title>
+<style>
+  :root{
+    --surface:#fcfcfb; --page:#f4f4f1; --ink:#0b0b0b; --ink2:#52514e; --muted:#898781;
+    --grid:#e1e0d9; --axis:#c3c2b7; --accent:#2a78d6; --accent-soft:#dceafb;
+    --radius:10px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page);color:var(--ink);
+       font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+  .wrap{max-width:1100px;margin:0 auto;padding:28px 18px 80px}
+  h1{font-size:26px;margin:0 0 4px}
+  h2{font-size:19px;margin:38px 0 12px}
+  .sub{color:var(--ink2);margin:0 0 22px}
+  .muted{color:var(--muted);font-size:13px}
+  .card{background:var(--surface);border:1px solid var(--grid);
+        border-radius:var(--radius);padding:20px;margin-bottom:18px}
+
+  /* ---- search ---- */
+  .search{display:flex;gap:10px;flex-wrap:wrap}
+  input[type=search]{flex:1;min-width:220px;padding:11px 13px;font-size:16px;
+    border:1px solid var(--axis);border-radius:8px;background:var(--surface);color:var(--ink)}
+  input[type=search]:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)}
+  button{padding:11px 18px;font-size:15px;border:0;border-radius:8px;
+    background:var(--accent);color:#fff;cursor:pointer}
+  button:hover{background:#1c5cab}
+  .hits{margin-top:10px;display:flex;flex-wrap:wrap;gap:6px}
+  .hit{border:1px solid var(--grid);background:var(--surface);color:var(--ink);
+       padding:5px 10px;border-radius:999px;cursor:pointer;font-size:13px}
+  .hit:hover{border-color:var(--accent)}
+
+  /* ---- player card ---- */
+  .who{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:2px}
+  .who .nm{font-size:27px;font-weight:600}
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));
+         gap:14px;margin:18px 0 6px}
+  .tile .v{font-size:25px;font-weight:600;line-height:1.1}
+  .tile .k{font-size:12.5px;color:var(--ink2)}
+  .tile .s{font-size:11.5px;color:var(--muted)}
+
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--grid)}
+  th{color:var(--ink2);font-weight:600;font-size:12.5px}
+  td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .bar{position:relative;background:var(--accent-soft);border-radius:4px;height:16px;min-width:2px}
+  .bar>span{position:absolute;inset:0;background:var(--accent);border-radius:4px}
+  .barcell{width:38%}
+
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:720px){.split{grid-template-columns:1fr}}
+
+  /* ---- chart gallery ---- */
+  .gal{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+  .gal figure{margin:0;background:var(--surface);border:1px solid var(--grid);
+              border-radius:var(--radius);overflow:hidden}
+  .gal img{width:100%;display:block;background:var(--surface)}
+  .gal figcaption{padding:8px 12px;font-size:13px;color:var(--ink2)}
+  .gal a{text-decoration:none;color:inherit}
+  details summary{cursor:pointer;font-size:15px;color:var(--accent);margin-bottom:12px}
+  .hidden{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Warsong Gulch stats</h1>
+  <p class="sub" id="period"></p>
+
+  <div class="card">
+    <div class="search">
+      <input type="search" id="q" placeholder="Type a character name…" autocomplete="off"
+             aria-label="Character name">
+      <button id="go">Show stats</button>
+    </div>
+    <div class="hits" id="hits"></div>
+    <p class="muted" id="searchNote" style="margin:10px 0 0"></p>
+  </div>
+
+  <div id="card" class="hidden"></div>
+
+  <h2>Server report</h2>
+  <p class="sub">Every chart from the full analysis, regenerated with the data above.</p>
+  <div class="gal" id="gal"></div>
+
+  <p class="muted" id="foot" style="margin-top:34px"></p>
+</div>
+
+<script id="payload" type="application/json">__DATA__</script>
+<script>
+const DATA = JSON.parse(document.getElementById("payload").textContent);
+const P = DATA.players, META = DATA.meta;
+const SEC = new Set(DATA.secondsStats);
+const LBL = DATA.statLabels;
+
+/* ---------- formatting ---------- */
+const nf = new Intl.NumberFormat("en-US");
+const fmt = v => v == null ? "–" : nf.format(Math.round(v));
+const pct = v => v == null ? "–" : (v * 100).toFixed(0) + " %";
+const dur = s => { if (s == null) return "–"; s = Math.round(s);
+  const h = Math.floor(s/3600), m = Math.floor(s%3600/60), x = s%60;
+  return h ? `${h}:${String(m).padStart(2,"0")}:${String(x).padStart(2,"0")}`
+           : `${m}:${String(x).padStart(2,"0")}`; };
+const statVal = (k, v) => SEC.has(k) ? dur(v) : fmt(v);
+const classColor = c => DATA.classColors[c] || "#c9c8c2";
+
+/* Darken a class colour until it is readable as text on a light surface,
+   the same rule the PNG charts use. */
+function readable(hex){
+  const rgb = [1,3,5].map(i => parseInt(hex.slice(i,i+2),16)/255);
+  const lum = c => { const l = c<=0.04045 ? c/12.92 : ((c+0.055)/1.055)**2.4; return l; };
+  const L = a => 0.2126*lum(a[0]) + 0.7152*lum(a[1]) + 0.0722*lum(a[2]);
+  for (let f=1; f>0.05; f-=0.04){
+    const c = rgb.map(v => v*f);
+    if ((1.05) / (L(c)+0.05) >= 4.5)
+      return "#" + c.map(v => Math.round(v*255).toString(16).padStart(2,"0")).join("");
+  }
+  return "#0b0b0b";
+}
+
+/* ---------- ranking helpers ---------- */
+const QUAL = P.filter(p => p.games >= META.minGames);
+function rankOf(player, get, pool){
+  const vals = pool.map(get).filter(v => v != null);
+  const mine = get(player);
+  if (mine == null || !vals.length) return null;
+  const better = vals.filter(v => v > mine).length;
+  return {rank: better + 1, of: vals.length,
+          pctile: vals.filter(v => v <= mine).length / vals.length};
+}
+
+/* ---------- search ---------- */
+const q = document.getElementById("q"), hits = document.getElementById("hits");
+document.getElementById("searchNote").textContent =
+  `${META.characters} characters recorded. Averages and ranks use the ${QUAL.length} `
+  + `with at least ${META.minGames} matches.`;
+
+function matches(term){
+  term = term.trim().toLowerCase();
+  if (!term) return [];
+  return P.filter(p => p.name.toLowerCase().includes(term)).slice(0, 12);
+}
+function renderHits(){
+  const list = matches(q.value);
+  hits.innerHTML = "";
+  if (list.length === 1 && list[0].name.toLowerCase() === q.value.trim().toLowerCase()){
+    show(list[0]); return;
+  }
+  list.forEach(p => {
+    const b = document.createElement("button");
+    b.className = "hit"; b.textContent = `${p.name} · ${p.class || "?"} · ${p.games} matches`;
+    b.style.color = readable(classColor(p.class));
+    b.onclick = () => { q.value = p.name; hits.innerHTML = ""; show(p); };
+    hits.appendChild(b);
+  });
+}
+q.addEventListener("input", renderHits);
+q.addEventListener("keydown", e => { if (e.key === "Enter"){ const l = matches(q.value);
+  if (l.length){ q.value = l[0].name; hits.innerHTML = ""; show(l[0]); } } });
+document.getElementById("go").onclick = () => { const l = matches(q.value);
+  if (l.length){ q.value = l[0].name; hits.innerHTML = ""; show(l[0]); } };
+
+/* ---------- the player card ---------- */
+const RANKED = ["damageDone","healingDone","damageOnEFC","healsOnFC",
+                "flagReturns","flagCaptures","killingBlows","absorbsDone",
+                "successfulInterrupts"];
+
+function show(p){
+  const el = document.getElementById("card");
+  const col = readable(classColor(p.class));
+  const wrRank = rankOf(p, x => x.winrate, QUAL.filter(x => x.decided >= META.minGames));
+
+  const tiles = [
+    [p.games, "matches played", `${p.days} day${p.days===1?"":"s"} active`],
+    [pct(p.winrate), "win rate", wrRank ? `#${wrRank.rank} of ${wrRank.of}` : "too few matches"],
+    [fmt(p.sum.flagCaptures), "flag captures", p.capRate!=null ? pct(p.capRate)+" of pickups" : ""],
+    [fmt(p.sum.flagReturns), "flag returns", ""],
+    [dur(p.sum.flagCarryTime), "flag carried", ""],
+    [Math.round(p.minutes/60)+" h", "time played", ""],
+  ];
+
+  const rows = RANKED.map(k => {
+    const r = rankOf(p, x => x.pm[k], QUAL);
+    return {k, v: p.pm[k], r};
+  }).filter(r => r.v != null).sort((a,b) => (b.r?.pctile||0) - (a.r?.pctile||0));
+
+  const bests = Object.entries(p.best).filter(([,v]) => v);
+
+  el.innerHTML = `
+    <div class="card">
+      <div class="who">
+        <span class="nm" style="color:${col}">${p.name}</span>
+        <span class="muted">${p.class || "class unknown"}</span>
+      </div>
+      <div class="tiles">
+        ${tiles.map(([v,k,s]) => `<div class="tile"><div class="v">${v}</div>
+          <div class="k">${k}</div><div class="s">${s}</div></div>`).join("")}
+      </div>
+    </div>
+
+    <div class="split">
+      <div class="card">
+        <h2 style="margin-top:0">Per minute, against the field</h2>
+        <p class="muted" style="margin-top:-6px">Bar shows the percentile among the
+          ${QUAL.length} characters with ${META.minGames}+ matches.</p>
+        <table><thead><tr><th>Statistic</th><th class="n">per min</th>
+          <th class="barcell">percentile</th><th class="n">rank</th></tr></thead><tbody>
+        ${rows.map(r => `<tr>
+          <td>${LBL[r.k] || r.k}</td>
+          <td class="n">${r.v >= 100 ? fmt(r.v) : r.v.toFixed(2)}</td>
+          <td class="barcell"><div class="bar"><span style="width:${
+              ((r.r?.pctile||0)*100).toFixed(0)}%;background:${col}"></span></div></td>
+          <td class="n">${r.r ? "#"+r.r.rank : "–"}</td></tr>`).join("")}
+        </tbody></table>
+      </div>
+
+      <div class="card">
+        <h2 style="margin-top:0">Personal bests</h2>
+        <p class="muted" style="margin-top:-6px">Best single match in the period.</p>
+        <table><tbody>
+        ${bests.map(([k,v]) => `<tr><td>${LBL[k]||k}</td>
+          <td class="n">${statVal(k,v)}</td></tr>`).join("")}
+        </tbody></table>
+
+        <h2>Contested vs thin lobbies</h2>
+        <p class="muted" style="margin-top:-6px">Contested = both teams fielded
+          ${META.contestedPerTeam}+ real players; thin = ${META.thinPerTeam} or fewer,
+          where bots filled the rest.</p>
+        <table><tbody>
+          <tr><td>Contested lobbies</td><td class="n">${pct(p.contestedWr)}</td>
+              <td class="n muted">${p.contestedN} matches</td></tr>
+          <tr><td>Thin lobbies</td><td class="n">${pct(p.thinWr)}</td>
+              <td class="n muted">${p.thinN} matches</td></tr>
+        </tbody></table>
+      </div>
+    </div>`;
+  el.classList.remove("hidden");
+  el.scrollIntoView({behavior:"smooth", block:"start"});
+}
+
+/* ---------- report gallery ---------- */
+const gal = document.getElementById("gal");
+if (DATA.charts.length){
+  DATA.charts.forEach(f => {
+    const label = f.replace(/^\d+_/, "").replace(/\.png$/, "").replace(/_/g, " ");
+    gal.insertAdjacentHTML("beforeend",
+      `<figure><a href="charts/${f}" target="_blank" rel="noopener">
+         <img loading="lazy" src="charts/${f}" alt="${label}">
+         <figcaption>${label}</figcaption></a></figure>`);
+  });
+} else {
+  gal.innerHTML = `<p class="muted">No chart images alongside this file.</p>`;
+}
+
+document.getElementById("period").textContent =
+  `${META.matches} matches · ${META.characters} characters · ${META.periodLabel}`;
+document.getElementById("foot").textContent =
+  `Source: 19pvp export ${META.source} · generated ${META.generated}. `
+  + `Only players running the PvP19 addon are recorded; bots fill empty slots and `
+  + `do not appear in the data.`;
+</script>
+</body>
+</html>
