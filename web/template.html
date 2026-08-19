@@ -97,7 +97,16 @@
   @media(max-width:640px){.lb button{font-size:20px;padding:10px 13px}}
 
   /* ---- chart gallery ---- */
-  .gal{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+  .galnav{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:20px}
+  .galnav button{border:1px solid var(--grid);background:var(--surface);
+                 color:var(--ink2);border-radius:999px;padding:5px 12px;
+                 font-size:12.5px;font-family:inherit;cursor:pointer}
+  .galnav button:hover{border-color:var(--accent);color:var(--accent)}
+  .gal section{margin-bottom:32px;scroll-margin-top:16px}
+  .gal h3{font-size:15px;margin:0 0 2px;color:var(--ink)}
+  .gal section > .muted{font-size:12.5px;margin:0 0 12px}
+  .gal-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));
+            gap:14px}
   .gal figure{margin:0;background:var(--surface);border:1px solid var(--grid);
               border-radius:var(--radius);overflow:hidden}
   .gal img{width:100%;display:block;background:var(--surface)}
@@ -134,6 +143,7 @@
 
   <h2>Server report</h2>
   <p class="sub">Every chart from the full analysis, regenerated with the data above.</p>
+  <nav class="galnav" id="galnav"></nav>
   <div class="gal" id="gal"></div>
 
   <p class="muted" id="foot" style="margin-top:34px"></p>
@@ -151,13 +161,15 @@ const LBL = DATA.statLabels;
    brings the rest back. P, QUAL and the chart list all follow it. */
 const HAS_CONTESTED = (DATA.playersContested || []).length > 0;
 let allLobbies = false;
-let P = [], QUAL = [], CHARTS = [];
+let P = [], QUAL = [], CHARTS = [], GROUPS = [];
 function applyScope(){
   const contested = HAS_CONTESTED && !allLobbies;
   P = contested ? DATA.playersContested : DATA.players;
   QUAL = P.filter(p => p.games >= META.minGames);
   CHARTS = contested && DATA.chartsContested.length
          ? DATA.chartsContested : DATA.charts;
+  GROUPS = (contested && DATA.chartsContested.length
+         ? DATA.chartGroupsContested : DATA.chartGroups) || [];
 }
 
 /* ---------- formatting ---------- */
@@ -511,6 +523,7 @@ function drawLog(){
 
 /* ---------- report gallery ---------- */
 const gal = document.getElementById("gal");
+const nav = document.getElementById("galnav");
 const chartStem = f => f.replace(/\.png$/, "");
 const chartInfo = f => (DATA.chartInfo || {})[chartStem(f)] || {};
 // Falls back to the file name so a chart added without a description still shows.
@@ -525,12 +538,32 @@ function renderGallery(){
     return;
   }
   const dir = chartDir();
-  gal.innerHTML = CHARTS.map((f, i) =>
-    `<figure><a href="#" data-i="${i}">
+  const secs = GROUPS.length ? GROUPS : [{name: "", charts: CHARTS.map(chartStem)}];
+
+  // data-i indexes the flat CHARTS array, not the section, so the lightbox
+  // arrows still walk the whole gallery across section boundaries.
+  const tile = stem => {
+    const f = stem + ".png";
+    return `<figure><a href="#" data-i="${CHARTS.indexOf(f)}">
        <img loading="lazy" src="${dir}/${f}" alt="${chartLabel(f)}">
        <figcaption><b>${chartLabel(f)}</b><span>${chartBlurb(f)}</span></figcaption>
-     </a></figure>`).join("");
-  gal.querySelectorAll("a").forEach(a => a.onclick = e => {
+     </a></figure>`;
+  };
+  gal.innerHTML = secs.map((g, i) => `<section id="sec-${i}">
+      ${g.name ? `<h3>${g.name}</h3>
+      <p class="muted">${g.charts.length} chart${g.charts.length === 1 ? "" : "s"}</p>` : ""}
+      <div class="gal-grid">${g.charts.map(tile).join("")}</div>
+    </section>`).join("");
+
+  // Buttons rather than links: a #hash here would collide with the character
+  // routing and drop whoever is on screen.
+  nav.innerHTML = secs.filter(g => g.name).map((g, i) =>
+    `<button data-sec="${i}">${g.name}</button>`).join("");
+  nav.querySelectorAll("button").forEach(b => b.onclick = () =>
+    document.getElementById(`sec-${b.dataset.sec}`)
+            .scrollIntoView({behavior: "smooth", block: "start"}));
+
+  gal.querySelectorAll("figure a").forEach(a => a.onclick = e => {
     e.preventDefault(); openLightbox(+a.dataset.i);
   });
 }

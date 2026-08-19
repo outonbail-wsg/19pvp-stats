@@ -341,9 +341,9 @@ def first_match(ctx: Ctx):
 
 
 CHARTS = [
-    ("25_contested_record", contested_record),
-    ("36_record_book", record_book),
-    ("37_rivalries", rivalries),
-    ("38_flag_efficiency", flag_efficiency),
+    ("32_contested_record", contested_record),
+    ("37_record_book", record_book),
+    ("38_rivalries", rivalries),
+    ("16_flag_efficiency", flag_efficiency),
     ("39_first_match", first_match),
 ]

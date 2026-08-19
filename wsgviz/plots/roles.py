@@ -158,6 +158,6 @@ def player_profiles(ctx: Ctx):
 
 
 CHARTS = [
-    ("31_role_map", role_map),
-    ("32_player_profiles", player_profiles),
+    ("24_role_map", role_map),
+    ("25_player_profiles", player_profiles),
 ]

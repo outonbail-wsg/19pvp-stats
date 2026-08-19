@@ -244,6 +244,12 @@ def build_payload(ctx: Ctx, chart_files=None, ctx_contested: Ctx | None = None,
         # Title and explanation per chart, keyed by file stem. The gallery shows
         # the image without its own title until it is opened, so it needs both.
         "chartInfo": _chart_info(chart_files, contested_charts),
+        # Reading order for the gallery, per chart set: a contested build ships a
+        # different list, so the sections have to be built from each separately.
+        "chartGroups": descriptions.grouped(
+            f.rsplit(".", 1)[0] for f in (chart_files or [])),
+        "chartGroupsContested": descriptions.grouped(
+            f.rsplit(".", 1)[0] for f in (contested_charts or [])),
     }
 
 

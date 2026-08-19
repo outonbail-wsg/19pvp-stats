@@ -18,6 +18,10 @@ from . import icons
 
 TOP_N = 8
 
+# Conversion is a ratio, so it needs a floor: one lucky grab would otherwise
+# sit at 100 % above everyone who ever carried the flag properly.
+MIN_PICKUPS = 25
+
 
 def _board(ctx: Ctx, stats, title, subtitle, note, *, fmt_total=T.compact,
            rate_decimals=2):
@@ -45,8 +49,12 @@ def _board(ctx: Ctx, stats, title, subtitle, note, *, fmt_total=T.compact,
             ("per match", per_match, qual,
              fmt_duration if seconds else (lambda v: T.compact(v) if v >= 10
                                            else f"{v:.{rate_decimals}f}")),
+            # A duration per minute is still a rate, so it stays a number rather
+            # than a clock reading - but it needs its unit, or "31" beside "1:10"
+            # reads as a count.
             ("per minute", per_min, qual,
-             lambda v: T.compact(v) if v >= 10 else f"{v:.{rate_decimals}f}"),
+             (lambda v: f"{v:.0f} s" if v >= 10 else f"{v:.1f} s") if seconds
+             else (lambda v: T.compact(v) if v >= 10 else f"{v:.{rate_decimals}f}")),
         ]
         for j, (suffix, series, frame, value_fmt) in enumerate(variants):
             ax = axes[i][j]
@@ -89,7 +97,62 @@ def carrier_leaders(ctx: Ctx):
         "character can lead damage overall and appear nowhere here.")
 
 
+def flag_hold(ctx: Ctx):
+    """Time spent on the flag, and how much of it turns into points."""
+    tot, qual = ctx.totals, ctx.qualified
+
+    hold = qual.copy()
+    hold["per_match"] = hold["flagCarryTime_sum"] / hold["games"]
+    hold["share"] = hold["flagCarryTime_sum"] / (hold["minutes"] * 60)
+
+    conv = tot[tot["attemptsOnFlag_sum"] >= MIN_PICKUPS].copy()
+    conv["rate"] = conv["flagCaptures_sum"] / conv["attemptsOnFlag_sum"]
+    conv["per_pickup"] = conv["flagCarryTime_sum"] / conv["attemptsOnFlag_sum"]
+    conv["pickups_pm"] = conv["attemptsOnFlag_sum"] / conv["games"]
+
+    overall = ctx.wsg["flagCaptures"].sum() / ctx.wsg["attemptsOnFlag"].sum()
+
+    fig = plt.figure(figsize=(13.5, 10.1))
+    top = T.figure_title(
+        fig, "WSG flag hold and conversion",
+        f"Top {TOP_N} for time spent carrying the flag, and for turning a pickup "
+        "into a capture")
+    bottom = T.footnote(fig, ctx.source_note(
+        f"The carry-time total covers every character; the two boards beside it need "
+        f"at least {ctx.min_games} matches. Conversion needs {MIN_PICKUPS}+ pickups, "
+        f"otherwise a single lucky grab tops it. Across everyone {overall*100:.0f} % of "
+        "pickups become a capture."))
+    axes = H.grid_axes(fig, 2, 3, left=0.105, right=0.975, top=top - 0.035,
+                       bottom=bottom, wspace=0.80, hspace=0.34)
+
+    panels = [
+        (tot, tot["flagCarryTime_sum"], "Flag carry time — total", fmt_duration,
+         "flagCarryTime"),
+        (hold, hold["per_match"], "per match", fmt_duration, None),
+        (hold, hold["share"], "share of own time played",
+         lambda v: f"{v*100:.1f} %", None),
+        (conv, conv["rate"], "Pickups that become a capture",
+         lambda v: f"{v*100:.0f} %", "attemptsOnFlag"),
+        (conv, conv["per_pickup"], "seconds carried per pickup", fmt_duration, None),
+        (conv, conv["pickups_pm"], "pickups per match", lambda v: f"{v:.2f}", None),
+    ]
+    for i, (frame, series, heading, value_fmt, icon_col) in enumerate(panels):
+        ax = axes[i // 3][i % 3]
+        best = series.nlargest(TOP_N)
+        sub = frame.loc[best.index]
+        H.top_hbar(ax, sub["player"], best.to_numpy(),
+                   colors=H.class_colors(sub["class_name"]),
+                   label_colors=H.class_text_colors(sub["class_name"]),
+                   value_fmt=value_fmt)
+        if icon_col:
+            icons.panel_title(fig, ax, heading, icon_col)
+        else:
+            ax.set_title(heading, fontsize=10.5, pad=8, loc="left")
+    return fig
+
+
 CHARTS = [
     ("13_flag_leaders", flag_leaders),
     ("14_carrier_leaders", carrier_leaders),
+    ("15_flag_hold", flag_hold),
 ]

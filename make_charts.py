@@ -19,13 +19,13 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 from wsgviz import context, data, theme  # noqa: E402
 from wsgviz.plots import (  # noqa: E402
-    arena, bracket, classes, leaderboards, match, objective, overview, realgames,
-    roles, standings, stories, winfactors,
+    arena, bracket, classes, control, leaderboards, match, objective, overview,
+    realgames, roles, standings, stories, winfactors,
 )
 
 # Ordered to match the chart numbering, so the run log reads in sequence.
-MODULES = [overview, bracket, classes, objective, match, winfactors, realgames,
-           leaderboards, roles, arena, stories, standings]
+MODULES = [overview, bracket, classes, objective, stories, control, leaderboards,
+           roles, match, realgames, winfactors, standings, arena]
 
 ROOT = Path(__file__).resolve().parent
 
@@ -35,11 +35,11 @@ ROOT = Path(__file__).resolve().parent
 ALL_LOBBIES_ONLY = {
     "05_activity_per_hour",     # one panel is the share of contested lobbies
     "06_activity_heatmap",      # real players per match, by definition high here
-    "17_humans_vs_bots",        # entirely about the human/bot split
-    "22_realgames_overview",    # already the contested slice
-    "23_realgames_team_compare",
-    "24_realgames_length",      # compares full lobbies against the rest
-    "25_contested_record",      # needs both sides of the comparison
+    "28_humans_vs_bots",        # entirely about the human/bot split
+    "29_realgames_overview",    # already the contested slice
+    "30_realgames_team_compare",
+    "31_realgames_length",      # compares full lobbies against the rest
+    "32_contested_record",      # needs both sides of the comparison
 }
 
 

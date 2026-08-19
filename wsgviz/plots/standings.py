@@ -9,7 +9,6 @@ lines and a grid of small boards read differently at a glance.
 from __future__ import annotations
 
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 
 from .. import theme as T
@@ -21,7 +20,6 @@ from . import helpers as H
 TABLE_ROWS = 20          # standings rows that fit without shrinking the type
 FORM_PLAYERS = 14
 FORM_MATCHES = 25
-RACE_PLAYERS = 6
 
 WIN_COLOR = "#1baf7a"
 LOSS_COLOR = "#e34948"
@@ -87,52 +85,6 @@ def power_ranking(ctx: Ctx):
     return fig
 
 
-def capture_race(ctx: Ctx):
-    """Cumulative captures over the period - the deck's only running total."""
-    w = ctx.wsg
-    daily = (w.groupby(["date", "playerGuid"])["flagCaptures"].sum()
-               .unstack(fill_value=0).sort_index().cumsum())
-    leaders = daily.iloc[-1].nlargest(RACE_PLAYERS).index
-
-    fig = plt.figure(figsize=(12, 6.6))
-    top = T.figure_title(
-        fig, "Flag capture race",
-        f"Running total of captures for the {RACE_PLAYERS} leading characters")
-    bottom = T.footnote(fig, ctx.source_note(
-        "Cumulative over the period, so a line can only rise; a flat stretch means the "
-        "character did not play or did not cap. Colour separates the six lines here "
-        "rather than marking class - three of the leaders are shamans and would "
-        "otherwise share one colour."))
-    xb = T.xband(fig, label=False)
-    ax = fig.add_axes([0.065, bottom + xb, 0.72, top - bottom - xb - 0.05])
-
-    ends = []
-    for guid, colour in zip(leaders, T.CATEGORICAL):
-        series = daily[guid]
-        ax.plot(series.index, series.to_numpy(), color=colour, linewidth=2)
-        ends.append([float(series.iloc[-1]), colour,
-                     f"{ctx.totals.loc[guid, 'player']}  {int(series.iloc[-1])}"])
-
-    T.clean_axes(ax)
-    ax.set_ylabel("captures, running total")
-    ax.set_xlim(daily.index[0], daily.index[-1] + pd.Timedelta(days=0.4))
-    ymax = daily[leaders].to_numpy().max() * 1.08
-    ax.set_ylim(0, ymax)
-
-    # End labels sit at their line's value, but several leaders finish within a
-    # few captures of each other, so push overlapping ones apart.
-    gap = ymax * 0.045
-    ends.sort(key=lambda e: e[0])
-    for i in range(1, len(ends)):
-        if ends[i][0] - ends[i - 1][0] < gap:
-            ends[i][0] = ends[i - 1][0] + gap
-    for y_pos, colour, label in ends:
-        H.label_last_point(ax, daily.index[-1], y_pos, label, colour)
-    ax.xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter("%d %b"))
-    fig.autofmt_xdate(rotation=0, ha="center")
-    return fig
-
-
 def class_boards(ctx: Ctx):
     """Top of each class by rating - a board every player can find themselves on."""
     q = _qualified(ctx).dropna(subset=["class_name"])
@@ -164,6 +116,5 @@ def class_boards(ctx: Ctx):
 
 CHARTS = [
     ("40_power_ranking", power_ranking),
-    ("41_capture_race", capture_race),
-    ("42_class_boards", class_boards),
+    ("41_class_boards", class_boards),
 ]

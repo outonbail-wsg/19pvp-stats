@@ -189,9 +189,9 @@ def leaderboard_activity(ctx: Ctx):
 
 
 CHARTS = [
-    ("26_leaders_flag_combat", leaderboard_flag),
-    ("27_leaders_utility", leaderboard_utility),
-    ("28_leaders_per_minute", leaderboard_per_minute),
-    ("29_leaderboard_winrate", leaderboard_winrate),
-    ("30_leaderboard_activity", leaderboard_activity),
+    ("19_leaders_flag_combat", leaderboard_flag),
+    ("20_leaders_utility", leaderboard_utility),
+    ("21_leaders_per_minute", leaderboard_per_minute),
+    ("22_leaderboard_winrate", leaderboard_winrate),
+    ("23_leaderboard_activity", leaderboard_activity),
 ]

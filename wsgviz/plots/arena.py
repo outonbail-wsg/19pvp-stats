@@ -18,7 +18,7 @@ from ..data import (STATS_BY_COLUMN, arena as arena_rows,
                     fmt_duration, player_totals, wilson_interval)
 from . import helpers as H
 
-BRACKETS = {"2v2": {"label": "Arena 2v2", "min_games": 10, "nums": (33, 34, 35)}}
+BRACKETS = {"2v2": {"label": "Arena 2v2", "min_games": 10, "nums": (42, 43, 44)}}
 
 COMBAT = ["damageDone", "healingDone", "damageTaken", "killingBlows",
           "honorableKills", "successfulInterrupts"]

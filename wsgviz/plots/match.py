@@ -134,7 +134,7 @@ def humans_vs_bots(ctx: Ctx):
 
 
 CHARTS = [
-    ("15_match_length", match_length),
-    ("16_final_score", final_score),
-    ("17_humans_vs_bots", humans_vs_bots),
+    ("26_match_length", match_length),
+    ("27_final_score", final_score),
+    ("28_humans_vs_bots", humans_vs_bots),
 ]
