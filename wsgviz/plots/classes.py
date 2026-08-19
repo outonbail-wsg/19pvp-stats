@@ -103,78 +103,82 @@ def class_winrate(ctx: Ctx):
     return fig
 
 
-def class_stats(ctx: Ctx):
-    """Mean per-minute output per class across six stats."""
+def class_matrix(ctx: Ctx):
+    """Every class against every core statistic in one shaded table.
+
+    Nine separate bar panels forced a reader to compare across panels that each
+    had their own scale. A table puts the numbers side by side; the shading is
+    per column, so it says "high for this statistic", never across units.
+    """
     r = ctx.rates[ctx.rates["class_name"].notna()]
-    order = _present_order(r["class_name"])
-
-    fig = plt.figure(figsize=(13, 7.6))
-    top = T.figure_title(
-        fig, "WSG per-minute output by class",
-        "Mean value per minute played, per class, for six core statistics")
-    bottom = T.footnote(fig, ctx.source_note(
-        "Rows with >=60 s played. Panels share the class order but not the scale. "
-        + _class_note(ctx.wsg)))
-    axes = H.grid_axes(fig, 2, 3, left=0.09, right=0.975, top=top,
-                       bottom=bottom + 0.02, wspace=0.75, hspace=0.40)
-
-    cols = _class_colors(order)
-    for i, col in enumerate(CLASS_STAT_GRID):
-        ax = axes[i // 3][i % 3]
-        means = r.groupby("class_name")[f"{col}_pm"].mean().reindex(order)
-        H.top_hbar(ax, order, means.to_numpy(), colors=cols,
-                   value_fmt=lambda v: T.compact(v))
-        icons.panel_title(fig, ax, STATS_BY_COLUMN[col].label + " / min", col)
-    return fig
-
-
-def class_flag_roles(ctx: Ctx):
-    """Which classes carry, return, and pressure the enemy carrier."""
-    r = ctx.rates[ctx.rates["class_name"].notna()]
-    order = _present_order(r["class_name"])
-    panels = [
-        ("flagCarryTime", "flagCarryTime_sum", "Flag carry time per match", "s"),
-        ("flagReturns", "flagReturns_sum", "Flag returns per match", ""),
-        ("damageOnEFC", "damageOnEFC_pm", "Damage on enemy carrier / min", ""),
-    ]
     w = ctx.wsg[ctx.wsg["class_name"].notna()]
+    order = _present_order(r["class_name"])
+
     per_match = w.groupby("class_name").agg(
-        games=("eventId", "size"),
-        carry=("flagCarryTime", "sum"),
-        returns=("flagReturns", "sum"))
+        games=("eventId", "size"), carry=("flagCarryTime", "sum"),
+        returns=("flagReturns", "sum"), caps=("flagCaptures", "sum"))
+    rate = r.groupby("class_name")
 
-    fig = plt.figure(figsize=(13, 5.8))
+    # (label, series, formatter) - all per minute except the flag work, which
+    # reads better per match.
+    columns = [
+        ("Damage\n/min", rate["damageDone_pm"].mean(), T.compact),
+        ("Healing\n/min", rate["healingDone_pm"].mean(), T.compact),
+        ("Absorbs\n/min", rate["absorbsDone_pm"].mean(), T.compact),
+        ("On enemy\ncarrier /min", rate["damageOnEFC_pm"].mean(), T.compact),
+        ("Heals on\ncarrier /min", rate["healsOnFC_pm"].mean(), T.compact),
+        ("Killing blows\n/min", rate["killingBlows_pm"].mean(), lambda v: f"{v:.2f}"),
+        ("Interrupts\n/min", rate["successfulInterrupts_pm"].mean(), lambda v: f"{v:.2f}"),
+        ("Carry time\nper match", per_match["carry"] / per_match["games"],
+         lambda v: f"{v:.0f}s"),
+        ("Returns\nper match", per_match["returns"] / per_match["games"],
+         lambda v: f"{v:.2f}"),
+    ]
+
+    fig = plt.figure(figsize=(13.5, 6.4))
     top = T.figure_title(
-        fig, "WSG flag work by class",
-        "Flag carrying, returns and pressure on the enemy carrier, per class")
+        fig, "Class comparison",
+        "Mean output per class across nine statistics")
     bottom = T.footnote(fig, ctx.source_note(
-        "Carry time and returns per player-match; damage on carrier per minute. "
-        + _class_note(ctx.wsg)))
-    xb = T.xband(fig)
-    h = top - bottom - xb
-    w_ax = 0.255
+        "Shading runs within each column, from the lowest value in that column to the "
+        "highest - it never compares across columns, whose units differ. Per-minute "
+        "figures use rows with at least 60 s played. " + _class_note(ctx.wsg)))
+    ax = fig.add_axes([0.105, bottom, 0.875, top - bottom - 0.09])
 
-    cols = _class_colors(order)
-    carry = (per_match["carry"] / per_match["games"]).reindex(order)
-    ax1 = fig.add_axes([0.075, bottom + xb, w_ax, h])
-    H.top_hbar(ax1, order, carry.to_numpy(), colors=cols,
-               value_fmt=lambda v: f"{v:.0f}s", title="Flag carry time per match")
+    values = np.array([[float(s.reindex(order).iloc[i]) for _, s, _ in columns]
+                       for i in range(len(order))])
+    # Rank within each column so a single dominant class cannot flatten the rest.
+    shade = np.zeros_like(values)
+    for j in range(values.shape[1]):
+        col = values[:, j]
+        lo, hi = np.nanmin(col), np.nanmax(col)
+        shade[:, j] = (col - lo) / (hi - lo) if hi > lo else 0.5
 
-    rets = (per_match["returns"] / per_match["games"]).reindex(order)
-    ax2 = fig.add_axes([0.40, bottom + xb, w_ax, h])
-    H.top_hbar(ax2, order, rets.to_numpy(), colors=cols,
-               value_fmt=lambda v: T.num(v, 2), title="Flag returns per match")
+    ax.imshow(shade, cmap=T.SEQUENTIAL, aspect="auto", vmin=-0.15, vmax=1.15)
+    ax.set_xticks(range(len(columns)))
+    ax.set_xticklabels([c[0] for c in columns], fontsize=9, color=T.INK_SECONDARY)
+    ax.set_yticks(range(len(order)))
+    ax.set_yticklabels(order, fontsize=10)
+    for tick, cls in zip(ax.get_yticklabels(), order):
+        tick.set_color(H.class_text_colors([cls])[0])
+        tick.set_fontweight("semibold")
+    ax.xaxis.set_ticks_position("top")
+    ax.tick_params(length=0)
+    ax.grid(False)
+    for side in ("top", "right", "left", "bottom"):
+        ax.spines[side].set_visible(False)
 
-    efc = r.groupby("class_name")["damageOnEFC_pm"].mean().reindex(order)
-    ax3 = fig.add_axes([0.725, bottom + xb, w_ax, h])
-    H.top_hbar(ax3, order, efc.to_numpy(), colors=cols,
-               value_fmt=lambda v: T.compact(v), title="Damage on enemy carrier / min")
+    for i in range(values.shape[0]):
+        for j, (_, _, fmt) in enumerate(columns):
+            # Dark cells need light type; the ramp crosses over around 0.55.
+            colour = T.SURFACE if shade[i, j] > 0.55 else T.INK
+            ax.text(j, i, fmt(values[i, j]), ha="center", va="center",
+                    fontsize=9.5, color=colour)
     return fig
 
 
 CHARTS = [
     ("08_class_distribution", class_distribution),
     ("11_class_winrate", class_winrate),
-    ("12_class_stats", class_stats),
-    ("13_class_flag_roles", class_flag_roles),
+    ("12_class_matrix", class_matrix),
 ]

@@ -10,7 +10,8 @@ profiles and a short arena companion.
 python make_charts.py
 ```
 
-Charts land in `output/` (43 PNGs, numbered `01_…` to `43_…`). The script
+Charts land in `output/` (41 PNGs, numbered `01_…` to `43_…`; three numbers were
+freed when bar grids were merged into tables). The script
 picks the newest `leaderboard-raw-*.csv` in `Data/` automatically.
 
 Options:
@@ -30,7 +31,7 @@ pip install -r requirements.txt
 
 ## The charts
 
-43 charts, numbered in reading order.
+41 charts, numbered in reading order.
 
 **The bracket** — how big the scene is and when it is alive
 | # | File | Shows |
@@ -48,8 +49,7 @@ pip install -r requirements.txt
 | 09 | class_meta | popularity vs win rate on one panel |
 | 10 | team_composition | what a typical team is made of |
 | 11 | class_winrate | win rate per class with Wilson interval |
-| 12 | class_stats | per-minute output per class, six stats |
-| 13 | class_flag_roles | carry / return / enemy-carrier pressure per class |
+| 12 | class_matrix | all classes × nine statistics, shaded within each column |
 
 **Matches and what wins them**
 | 14 | match_length | match-length distribution |
@@ -67,14 +67,13 @@ pip install -r requirements.txt
 | 24 | contested_record | **win rate in contested vs thin lobbies** |
 
 **Player leaderboards** (bars and names coloured by class)
-| 25 | leaderboard_flag | flag totals |
-| 26 | leaderboard_combat | damage / healing / kills totals |
-| 27 | leaderboard_utility | interrupts / dispels / CC totals |
-| 28 | leaderboard_per_minute | efficiency (per minute) |
-| 29 | leaderboard_winrate | best win rate with Wilson interval |
-| 30 | leaderboard_activity | most matches / hours / days active |
+| 25 | leaders_flag_combat | leaders table, 12 flag and combat statistics |
+| 26 | leaders_utility | leaders table, 9 utility statistics |
+| 27 | leaders_per_minute | leaders table, 9 rates per minute |
+| 28 | leaderboard_winrate | best win rate with an uncertainty band |
+| 29 | leaderboard_activity | most matches / hours / days active |
 | 31 | role_map | damage vs healing scatter, coloured by class |
-| 32 | player_profiles | class-coloured radar profiles of the most active |
+| 32 | player_profiles | player cards: headline numbers plus radar |
 
 **Arena 2v2**
 | 33–35 | 2v2_overview / _leaderboards / _winrate | 2v2 |

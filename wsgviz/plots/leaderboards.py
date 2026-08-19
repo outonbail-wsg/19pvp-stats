@@ -27,73 +27,85 @@ RATE_STATS = ["damageDone", "healingDone", "damageOnEFC", "healsOnFC",
               "flagReturns", "flagCaptures"]
 
 
+TABLE_TOP = 5            # names shown per statistic in a leaders table
+
+
 def _fmt_for(col: str):
     return fmt_duration if STATS_BY_COLUMN[col].seconds else T.compact
 
 
-def _panel(fig, ax, tot, col, suffix, title_suffix="", fmt=None):
-    """One top-10 panel for a single statistic, bars coloured by class."""
-    key = f"{col}{suffix}"
-    top = tot.nlargest(TOP_N, key)
-    H.top_hbar(ax, top["player"], top[key].to_numpy(),
-               colors=H.class_colors(top["class_name"]),
-               label_colors=H.class_text_colors(top["class_name"]),
-               value_fmt=fmt or _fmt_for(col))
-    icons.panel_title(fig, ax, STATS_BY_COLUMN[col].label + title_suffix, col)
+def _leaders_table(ctx: Ctx, stats, title, subtitle, note, *, suffix="_sum",
+                   totals=None, fmt=None, unit=""):
+    """One row per statistic, the leading characters listed across it.
 
-
-def _leaderboard_grid(ctx: Ctx, stats, title, subtitle, note, *, suffix="_sum",
-                      totals=None, fmt=None, title_suffix=""):
+    A table rather than a grid of bars: the deck already leans heavily on bars,
+    and a reader asking "who leads this" wants to scan names, not compare bar
+    lengths across panels that each carry their own scale.
+    """
     tot = ctx.totals if totals is None else totals
-    fig = plt.figure(figsize=(13.5, 9.8))
+    fig = plt.figure(figsize=(13.5, 1.15 + 0.66 * len(stats)))
     top = T.figure_title(fig, title, subtitle)
     bottom = T.footnote(fig, ctx.source_note(note))
-    axes = H.grid_axes(fig, 2, 3, left=0.10, right=0.975, top=top,
-                       bottom=bottom, wspace=0.85, hspace=0.42)
+
+    x_label, x_first, x_step = 0.055, 0.235, 0.152
+    step = (top - bottom) / len(stats)
     for i, col in enumerate(stats):
-        _panel(fig, axes[i // 3][i % 3], tot, col, suffix, title_suffix, fmt)
+        row_y = top - step * (i + 0.42)
+        icons.draw(fig, 0.026, row_y + step * 0.06, icons.STAT_ICON.get(col),
+                   size_in=0.17)
+        fig.text(x_label, row_y + step * 0.06, STATS_BY_COLUMN[col].label,
+                 fontsize=10.5, fontweight="semibold", color=T.INK,
+                 ha="left", va="center")
+
+        best = tot.nlargest(TABLE_TOP, f"{col}{suffix}")
+        value_fmt = fmt or _fmt_for(col)
+        colours = H.class_text_colors(best["class_name"])
+        for rank, ((_, r), colour) in enumerate(zip(best.iterrows(), colours), start=1):
+            x = x_first + (rank - 1) * x_step
+            fig.text(x, row_y + step * 0.18, f"{rank}", fontsize=9,
+                     color=T.INK_MUTED, ha="left", va="center")
+            fig.text(x + 0.016, row_y + step * 0.18, r["player"], fontsize=10,
+                     fontweight="semibold", color=colour, ha="left", va="center")
+            fig.text(x + 0.016, row_y - step * 0.16,
+                     value_fmt(r[f"{col}{suffix}"]) + unit, fontsize=9.5,
+                     color=T.INK_SECONDARY, ha="left", va="center")
+        # Hairline under the row, so the eye can follow it across.
+        fig.add_artist(plt.Line2D([0.022, 0.978], [row_y - step * 0.42] * 2,
+                                  color=T.GRID, linewidth=0.8))
     return fig
 
 
 def leaderboard_flag(ctx: Ctx):
-    """Everything around the flag - totals over the window."""
-    return _leaderboard_grid(
-        ctx, FLAG_STATS,
-        "WSG leaderboards: flag play",
-        f"Top {TOP_N} by total over the whole period",
-        "Totals favour players with more matches; see the per-minute board.")
-
-
-def leaderboard_combat(ctx: Ctx):
-    """Damage, healing, kills - totals."""
-    return _leaderboard_grid(
-        ctx, COMBAT_STATS,
-        "WSG leaderboards: combat",
-        f"Top {TOP_N} by total over the whole period",
-        "Damage taken tracks flag carriers and front-line play.")
+    """Flag play and combat totals, as one leaders table."""
+    return _leaders_table(
+        ctx, FLAG_STATS + COMBAT_STATS,
+        "WSG stat leaders: flag play and combat",
+        f"The {TABLE_TOP} leading characters per statistic, totals over the period",
+        "Totals favour players with more matches; the per-minute table ranks by rate "
+        "instead. 'Damage taken' tracks flag carriers and front-line play.")
 
 
 def leaderboard_utility(ctx: Ctx):
-    """Interrupts, dispels, crowd control - totals."""
-    return _leaderboard_grid(
-        ctx, UTILITY_STATS,
-        "WSG leaderboards: interrupts, dispels and crowd control",
-        f"Top {TOP_N} by total over the whole period",
-        "Not class-adjusted; see the class charts.")
+    """Interrupts, dispels, crowd control and the flag-work rates."""
+    return _leaders_table(
+        ctx, UTILITY_STATS + ["attemptsOnFlag", "bonusHonor", "deaths"],
+        "WSG stat leaders: utility",
+        f"The {TABLE_TOP} leading characters per statistic, totals over the period",
+        "These depend heavily on class - a priest will always outrank a warrior on "
+        "dispels. See the class charts for a per-class view.")
 
 
 def leaderboard_per_minute(ctx: Ctx):
     """Efficiency rather than volume - values per minute played."""
     q = ctx.qualified
-    return _leaderboard_grid(
-        ctx, RATE_STATS,
-        "WSG leaderboards: output per minute",
-        f"Top {TOP_N} by value per minute played, characters with at least "
-        f"{ctx.min_games} matches only",
-        f"{len(q)} of {len(ctx.totals)} characters clear the threshold. Per minute "
-        "actually played, not match length.",
-        suffix="_pm", totals=q, fmt=lambda v: T.compact(v) + "/min",
-        title_suffix=" per minute")
+    return _leaders_table(
+        ctx, RATE_STATS + ["killingBlows", "absorbsDone", "successfulInterrupts"],
+        "WSG stat leaders: output per minute",
+        f"The {TABLE_TOP} leading characters per statistic, per minute played, "
+        f"characters with at least {ctx.min_games} matches",
+        f"{len(q)} of {len(ctx.totals)} characters clear the threshold. Rates are per "
+        "minute actually played, not per match length.",
+        suffix="_pm", totals=q, fmt=T.compact, unit="/min")
 
 
 def leaderboard_winrate(ctx: Ctx):
@@ -177,10 +189,9 @@ def leaderboard_activity(ctx: Ctx):
 
 
 CHARTS = [
-    ("25_leaderboard_flag", leaderboard_flag),
-    ("26_leaderboard_combat", leaderboard_combat),
-    ("27_leaderboard_utility", leaderboard_utility),
-    ("28_leaderboard_per_minute", leaderboard_per_minute),
-    ("29_leaderboard_winrate", leaderboard_winrate),
-    ("30_leaderboard_activity", leaderboard_activity),
+    ("25_leaders_flag_combat", leaderboard_flag),
+    ("26_leaders_utility", leaderboard_utility),
+    ("27_leaders_per_minute", leaderboard_per_minute),
+    ("28_leaderboard_winrate", leaderboard_winrate),
+    ("29_leaderboard_activity", leaderboard_activity),
 ]

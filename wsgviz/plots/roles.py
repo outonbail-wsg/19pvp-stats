@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from .. import rating
 from .. import theme as T
 from ..context import Ctx
 from ..data import fmt_duration
@@ -97,49 +98,62 @@ def role_map(ctx: Ctx):
 
 
 def player_profiles(ctx: Ctx):
-    """Radar profiles of the most active characters."""
+    """Player cards: the headline numbers around each character's shape."""
     q = _profile(ctx)
+    q["elo"] = rating.elo_ratings(ctx.wsg[~ctx.wsg["draw"]])
     dims = [c for c, _ in PROFILE_DIMS if c in q.columns]
     labels = [lab for c, lab in PROFILE_DIMS if c in q.columns]
     # Percentile rank inside the qualified pool: the shape is a comparison, not
     # an absolute size.
     ranks = q[dims].rank(pct=True)
+    elo_rank = q["elo"].rank(ascending=False)
 
     top_players = q.nlargest(8, "games")
-    fig = plt.figure(figsize=(13.5, 8.8))
+    fig = plt.figure(figsize=(13.5, 9.6))
     top = T.figure_title(
-        fig, "WSG player profiles: eight most active characters",
+        fig, "WSG player cards: eight most active characters",
         "Each axis is the character's percentile among all qualified characters – "
         "the outer ring is the highest value in the pool")
     bottom = T.footnote(fig, ctx.source_note(
         f"Percentile among {len(q)} characters with >={ctx.min_games} matches, all axes "
         "per minute. Area is meaningless - read each spoke on its own. " + PROFILE_KEY))
 
-    # Each cell = a title strip on top and a square radar below it, with a wide
-    # gutter so neighbouring axis labels never touch.
     cols, rows = 4, 2
     cell_w = (1 - 0.04) / cols
     cell_h = (top - bottom) / rows
-    title_strip = 0.055          # figure-fraction reserved above each radar
-    inset_x, inset_y = 0.030, 0.018
-    for i, (_, row) in enumerate(top_players.iterrows()):
+    header = 0.105               # figure-fraction the card header occupies
+    inset_x, inset_y = 0.028, 0.015
+    for i, (guid, row) in enumerate(top_players.iterrows()):
         r, c = divmod(i, cols)
-        cell_left = 0.02 + c * cell_w
+        left = 0.02 + c * cell_w
         cell_top = top - r * cell_h
-        fig.text(cell_left + cell_w / 2, cell_top - 0.006,
-                 f"{row['player']}", fontsize=10.5, fontweight="semibold",
-                 ha="center", va="top", color=T.INK)
+        colour = H.class_text_colors([row.get("class_name")])[0]
+
+        # The card itself, so each character reads as one object.
+        fig.patches.append(plt.Rectangle(
+            (left + 0.008, cell_top - cell_h + 0.012), cell_w - 0.016,
+            cell_h - 0.024, transform=fig.transFigure, facecolor=T.PAGE,
+            edgecolor=T.GRID, linewidth=0.8, zorder=-1))
+
+        mid = left + cell_w / 2
+        fig.text(mid, cell_top - 0.012, row["player"], fontsize=12,
+                 fontweight="semibold", ha="center", va="top", color=colour)
         cls = row["class_name"] if pd.notna(row.get("class_name")) else row["archetype"]
-        fig.text(cell_left + cell_w / 2, cell_top - 0.030,
-                 f"{int(row['games'])} matches · {row['winrate']*100:.0f} % WR · {cls}",
-                 fontsize=8.3, ha="center", va="top", color=T.INK_SECONDARY)
-        ax = fig.add_axes([cell_left + inset_x,
-                           cell_top - cell_h + inset_y,
+        fig.text(mid, cell_top - 0.040, cls, fontsize=9,
+                 ha="center", va="top", color=T.INK_SECONDARY)
+        stats = (f"{int(row['games'])} matches   ·   {row['winrate']*100:.0f} % won"
+                 f"   ·   {row['elo']:.0f} rating (#{int(elo_rank[guid])})")
+        fig.text(mid, cell_top - 0.064, stats, fontsize=8.5,
+                 ha="center", va="top", color=T.INK)
+
+        ax = fig.add_axes([left + inset_x,
+                           cell_top - cell_h + inset_y + 0.012,
                            cell_w - 2 * inset_x,
-                           cell_h - title_strip - 2 * inset_y],
+                           cell_h - header - 2 * inset_y],
                           projection="polar")
-        color = H.class_colors([row.get("class_name")])[0]
-        H.radar(ax, ranks.loc[row.name, dims].to_numpy(), labels, color=color)
+        ax.patch.set_alpha(0)
+        H.radar(ax, ranks.loc[guid, dims].to_numpy(), labels,
+                color=H.class_colors([row.get("class_name")])[0])
     return fig
 
 
