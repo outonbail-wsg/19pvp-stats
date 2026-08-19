@@ -68,11 +68,10 @@ def contested_record(ctx: Ctx):
         f"Characters with at least {MIN_IN_EACH} decided matches in both kinds of lobby, "
         "biggest gap first")
     bottom = T.footnote(fig, ctx.source_note(
-        f"A team holds 10 slots. Contested = both teams fielded at least "
-        f"{CONTESTED_PER_TEAM} real players; thin = both at {THIN_PER_TEAM} or fewer, "
-        f"where bots filled the rest. {len(g)} characters qualify. Thin lobbies run "
-        "mostly at night, so the gap mixes lobby fill with opponent strength - it is a "
-        "record adjusted for how contested the game was, not proof of farming."))
+        f"Contested = both teams fielded at least {CONTESTED_PER_TEAM} real players; "
+        f"thin = both at {THIN_PER_TEAM} or fewer. {len(g)} characters qualify. Thin "
+        "lobbies run mostly at night, so the gap mixes lobby fill with opponent strength "
+        "- a record adjusted for how contested the game was, not proof of farming."))
     ax = fig.add_axes([0.17, bottom + 0.05, 0.72, top - bottom - 0.09])
 
     y = np.arange(len(best))

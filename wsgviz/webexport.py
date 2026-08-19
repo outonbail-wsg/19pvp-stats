@@ -25,11 +25,13 @@ SUM_STATS = [
     "successfulInterrupts", "fakeCastInterrupts", "dispelsOffensive",
     "dispelsDefensive", "hardCCDuration", "softCCDuration", "bonusHonor",
 ]
-# Rates the card ranks a character on. Seconds-based stats are excluded: a
-# per-minute value of a duration is not meaningful.
+# Rates the card ranks a character on. flagCarryTime is a duration, so its
+# per-minute value is a share of time rather than a rate - the page uses it only
+# for the profile shape, not in the per-minute table.
 RATE_STATS = [
     "damageDone", "healingDone", "damageOnEFC", "healsOnFC", "flagReturns",
     "flagCaptures", "killingBlows", "absorbsDone", "successfulInterrupts",
+    "flagCarryTime",
 ]
 # Single-match personal bests.
 BEST_STATS = [
