@@ -15,9 +15,16 @@ import pandas as pd
 # Columns the docs list for the raw export but that are zero throughout.
 DEAD_COLUMNS = ["games", "wins", "losses"]
 
-# WSG ends at 3 flags. A match counts as "fully tracked" when the recorded
-# players of the winning team hold 3 captures between them.
+# WSG ends when a side captures 3 flags OR when the round timer expires - in
+# this build after 25 minutes, which the data confirms: match lengths pile up
+# sharply in the last half minute before 25:00 and essentially stop there.
+# A timer ending is a normal result, so 2-1, 1-0 and 0-0 are real final scores,
+# not evidence of missing data.
 CAPS_TO_WIN = 3
+TIMER_SECONDS = 25 * 60
+# `duration` is the longest time played by anyone, which can run slightly past
+# the round timer, so the test for a timer ending needs a little slack.
+TIMER_SLACK = 30
 
 # A WSG team holds 10 slots. A match counts as contested when both sides fielded
 # at least this many distinct real players - bots fill whatever is left, and they
@@ -192,10 +199,21 @@ def matches(w: pd.DataFrame) -> pd.DataFrame:
                                 np.where(m.winner == 1, m.caps_team1, np.nan))
     m["caps_loser"] = np.where(m.winner == 0, m.caps_team1,
                                np.where(m.winner == 1, m.caps_team0, np.nan))
-    # Only when the winning team shows all 3 captures did every capture come
-    # from a recorded player - only then is the final score trustworthy.
-    m["fully_tracked"] = m["caps_winner"] == CAPS_TO_WIN
-    m["margin"] = np.where(m.fully_tracked, CAPS_TO_WIN - m.caps_loser, np.nan)
+    # How the round ended. A win on 3 captures is self-evidently complete; a
+    # timer ending is complete too, just with a lower score. Anything else means
+    # the recorded players left before the end, so `duration` understates the
+    # match and the score cannot be trusted.
+    m["capped_out"] = m["caps_winner"] == CAPS_TO_WIN
+    m["timer_ended"] = m["duration"] >= TIMER_SECONDS - TIMER_SLACK
+    m["score_known"] = (m["capped_out"] | m["timer_ended"]) & ~m["draw"]
+    m["margin"] = np.where(m["score_known"], m["caps_winner"] - m["caps_loser"], np.nan)
+    m["score"] = np.where(
+        m["score_known"],
+        (m["caps_winner"].astype("Float64").astype("string")
+         .str.replace(r"\.0$", "", regex=True) + "–"
+         + m["caps_loser"].astype("Float64").astype("string")
+         .str.replace(r"\.0$", "", regex=True)),
+        pd.NA)
     m["minutes"] = m["duration"] / 60.0
     return m
 

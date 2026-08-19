@@ -4,16 +4,12 @@ from __future__ import annotations
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 
 from .. import theme as T
 from ..context import TRACKING_CAVEAT, Ctx
-from ..data import CAPS_TO_WIN, fmt_duration
+from ..data import CAPS_TO_WIN, TIMER_SECONDS, fmt_duration
 from . import helpers as H
-
-
-def _score_label(margin: float) -> str:
-    """margin = 3 minus the loser's captures."""
-    return f"{CAPS_TO_WIN}–{int(CAPS_TO_WIN - margin)}"
 
 
 def match_length(ctx: Ctx):
@@ -45,25 +41,40 @@ def match_length(ctx: Ctx):
 
 
 def final_score(ctx: Ctx):
-    """How close do matches end?"""
+    """How matches end, and on what score."""
     m = ctx.matches
-    ok = m[m["fully_tracked"]]
-    counts = ok["margin"].value_counts().reindex([3.0, 2.0, 1.0]).fillna(0).astype(int)
-    total = counts.sum()
+    known = m[m["score_known"]]
+    total = len(known)
 
-    fig = plt.figure(figsize=(11.5, 5.2))
+    ending = pd.Series({
+        f"Captured {CAPS_TO_WIN} flags": int(known["capped_out"].sum()),
+        "Timer expired": int((~known["capped_out"]).sum()),
+    })
+    scores = known["score"].value_counts().head(8)
+
+    fig = plt.figure(figsize=(12.5, 5.6))
     top = T.figure_title(
-        fig, "WSG final score distribution",
-        f"Final score of the {T.num(total)} matches whose score is fully tracked")
+        fig, "How a WSG match ends",
+        f"Way the round finished and the resulting score, across {T.num(total)} matches")
     bottom = T.footnote(fig, ctx.source_note(
-        f"Only matches whose winning team shows all 3 captures ({ok.shape[0]} of "
-        f"{m.shape[0]}); otherwise the score is biased low."))
-    ax = fig.add_axes([0.13, bottom + 0.02, 0.72, top - bottom - 0.04])
+        f"A round ends on {CAPS_TO_WIN} captures or when the "
+        f"{TIMER_SECONDS // 60}-minute timer expires, so 2–1 or 1–0 are normal results. "
+        f"Excluded are {len(m) - total} matches whose recorded players all left before "
+        "the end, where the score cannot be read."))
+    xb = T.xband(fig)
+    h = top - bottom - xb
 
-    labels = [f"{_score_label(x)}\n{v/total*100:.0f} % of matches"
-              for x, v in zip(counts.index, counts)]
-    H.top_hbar(ax, labels, counts.to_numpy(), value_fmt=T.num,
-               bar_frac=0.34, title="Final score (winner – loser)")
+    ax1 = fig.add_axes([0.14, bottom + xb, 0.28, h])
+    H.top_hbar(ax1, [f"{k}\n{v/total*100:.0f} %" for k, v in ending.items()],
+               ending.to_numpy(), value_fmt=T.num, bar_frac=0.26,
+               title="How the round finished")
+    ax1.set_xlabel("matches")
+
+    ax2 = fig.add_axes([0.62, bottom + xb, 0.30, h])
+    H.top_hbar(ax2, [f"{s}   {v/total*100:.0f} %" for s, v in scores.items()],
+               scores.to_numpy(), value_fmt=T.num,
+               title="Final score (winner – loser)")
+    ax2.set_xlabel("matches")
     return fig
 
 

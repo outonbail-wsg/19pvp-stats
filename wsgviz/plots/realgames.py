@@ -18,7 +18,8 @@ import numpy as np
 
 from .. import theme as T
 from ..context import Ctx
-from ..data import CAPS_TO_WIN, CONTESTED_PER_TEAM, STATS_BY_COLUMN, fmt_duration
+from ..data import (CAPS_TO_WIN, CONTESTED_PER_TEAM, STATS_BY_COLUMN,
+                    TIMER_SECONDS, fmt_duration)
 from . import helpers as H
 
 # Team-total stats compared between winning and losing side. bonusHonor/honor
@@ -35,15 +36,11 @@ def _full_lobby_events(ctx: Ctx):
     return m[mask]
 
 
-def _score_label(margin: float) -> str:
-    return f"{CAPS_TO_WIN}–{int(CAPS_TO_WIN - margin)}"
-
-
 def realgames_overview(ctx: Ctx):
     """Scope of full-lobby matches and their final-score distribution."""
     full = _full_lobby_events(ctx)
-    ok = full[full["fully_tracked"]]
-    counts = ok["margin"].value_counts().reindex([3.0, 2.0, 1.0]).fillna(0).astype(int)
+    ok = full[full["score_known"]]
+    counts = ok["score"].value_counts().head(6)
     total = counts.sum()
 
     fig = plt.figure(figsize=(12.5, 6.2))
@@ -53,22 +50,23 @@ def realgames_overview(ctx: Ctx):
     bottom = T.footnote(fig, ctx.source_note(
         f"{len(full)} of {len(ctx.matches)} matches ({len(full)/len(ctx.matches)*100:.0f} %) "
         f"reach {CONTESTED_PER_TEAM} real players on both teams - the matches least "
-        f"diluted by bots. Score panel uses the fully-tracked subset ({len(ok)})."))
+        f"diluted by bots. Score panel uses the {len(ok)} of them that ran to a natural "
+        f"end, on {CAPS_TO_WIN} captures or on the {TIMER_SECONDS // 60}-minute timer."))
 
     tiles = [
         (T.num(len(full)), "full-lobby matches", f">= {CONTESTED_PER_TEAM} real per team"),
         (fmt_duration(full.loc[full.duration > 0, "duration"].median()),
          "median length", "longest time played"),
-        (f"{ok['margin'].eq(3).mean()*100:.0f} %" if len(ok) else "–",
-         "shutouts (3–0)", "of fully-tracked"),
+        (f"{ok['capped_out'].mean()*100:.0f} %" if len(ok) else "–",
+         f"end on {CAPS_TO_WIN} captures", "rest run out the timer"),
         (T.num(int(full["deserters"].sum())), "desertions", "across these matches"),
     ]
     for i, (v, lab, sub) in enumerate(tiles):
         H.stat_tile(fig, [0.05 + i * 0.235, top - 0.17, 0.20, 0.13], v, lab, sub)
 
     ax = fig.add_axes([0.30, bottom + 0.02, 0.45, top - 0.30 - bottom])
-    labels = [f"{_score_label(x)}\n{v/total*100:.0f} %" for x, v in zip(counts.index, counts)]
-    H.top_hbar(ax, labels, counts.to_numpy(), value_fmt=T.num, bar_frac=0.5,
+    labels = [f"{s}   {v/total*100:.0f} %" for s, v in counts.items()]
+    H.top_hbar(ax, labels, counts.to_numpy(), value_fmt=T.num,
                title="Final score (winner – loser)")
     return fig
 
