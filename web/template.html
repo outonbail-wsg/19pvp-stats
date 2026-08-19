@@ -54,6 +54,24 @@
   .split{display:grid;grid-template-columns:1fr 1fr;gap:18px}
   @media(max-width:720px){.split{grid-template-columns:1fr}}
 
+  /* ---- form strip: one box per match, newest last ---- */
+  .form{display:flex;flex-wrap:wrap;gap:3px;margin:6px 0 2px}
+  .form b{width:20px;height:20px;border-radius:4px;font:600 11px/20px system-ui;
+          text-align:center;color:#fff}
+  .form b.w{background:#1baf7a} .form b.l{background:#e34948}
+  .form b.d{background:#898781}
+  .streak{font-size:13px;color:var(--ink2);margin-top:2px}
+
+  /* ---- game log ---- */
+  .logwrap{max-height:420px;overflow:auto;margin-top:4px}
+  .logwrap table{font-size:13px}
+  .logwrap thead th{position:sticky;top:0;background:var(--surface);
+                    border-bottom:1px solid var(--axis);cursor:pointer;white-space:nowrap}
+  .logwrap thead th:hover{color:var(--accent)}
+  .res{font-weight:600} .res.w{color:#0f7f57} .res.l{color:#b8332f}
+  .pill{display:inline-block;padding:1px 7px;border-radius:999px;font-size:12px;
+        background:var(--accent-soft);color:#1c5cab}
+
   /* ---- chart gallery ---- */
   .gal{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
   .gal figure{margin:0;background:var(--surface);border:1px solid var(--grid);
@@ -132,6 +150,17 @@ function rankOf(player, get, pool){
   return {rank: better + 1, of: vals.length,
           pctile: vals.filter(v => v <= mine).length / vals.length};
 }
+/* Ranking a rogue's healing against priests is meaningless. Where a class has
+   enough qualified characters, rank inside it as well. */
+const MIN_CLASS_POOL = 8;
+const classPool = c => QUAL.filter(p => p.class === c);
+
+/* ---------- game log ---------- */
+const LF = {};
+DATA.logFields.forEach((f, i) => LF[f] = i);
+const logOf = p => (DATA.log[p.id] || DATA.log[String(p.id)] || []);
+const dateOf = sec => new Date(sec * 1000)
+  .toLocaleDateString("en-GB", {day:"2-digit", month:"short"});
 
 /* ---------- search ---------- */
 const q = document.getElementById("q"), hits = document.getElementById("hits");
@@ -220,18 +249,41 @@ function show(p){
   const col = readable(classColor(p.class));
   const wrRank = rankOf(p, x => x.winrate, QUAL.filter(x => x.decided >= META.minGames));
 
+  const eloRank = rankOf(p, x => x.elo, QUAL);
   const tiles = [
     [p.games, "matches played", `${p.days} day${p.days===1?"":"s"} active`],
     [pct(p.winrate), "win rate", wrRank ? `#${wrRank.rank} of ${wrRank.of}` : "too few matches"],
-    [fmt(p.sum.flagCaptures), "flag captures", p.capRate!=null ? pct(p.capRate)+" of pickups" : ""],
+    [p.elo != null ? Math.round(p.elo) : "–", "power rating",
+     eloRank ? `#${eloRank.rank} of ${eloRank.of}` : "needs more matches"],
+    [fmt(p.sum.flagCaptures), "flag captures",
+     p.capRate != null ? pct(p.capRate) + " of pickups" : ""],
     [fmt(p.sum.flagReturns), "flag returns", ""],
     [dur(p.sum.flagCarryTime), "flag carried", ""],
-    [Math.round(p.minutes/60)+" h", "time played", ""],
+    [p.kd != null ? p.kd.toFixed(2) : "–", "kills per death",
+     `${fmt(p.sum.killingBlows)} / ${fmt(p.sum.deaths)}`],
+    [Math.round(p.minutes/60) + " h", "time played",
+     `${p.firstSeen} – ${p.lastSeen}`],
   ];
 
+  /* form: the last 20 results, oldest left */
+  const log = logOf(p);
+  const recent = log.slice(-20);
+  const formHTML = recent.map(r => {
+    const v = r[LF.win];
+    return `<b class="${v>0?"w":v<0?"l":"d"}" title="${dateOf(r[LF.at])}">`
+         + `${v>0?"W":v<0?"L":"D"}</b>`;
+  }).join("");
+  const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+  const streakTxt = p.streak > 0 ? plural(p.streak, "win", "wins") + " in a row"
+                  : p.streak < 0 ? plural(-p.streak, "loss", "losses") + " in a row"
+                  : "no current run";
+
+  const pool = classPool(p.class);
+  const useClass = pool.length >= MIN_CLASS_POOL;
   const rows = RANKED.map(k => {
     const r = rankOf(p, x => x.pm[k], QUAL);
-    return {k, v: p.pm[k], r};
+    const rc = useClass ? rankOf(p, x => x.pm[k], pool) : null;
+    return {k, v: p.pm[k], r, rc};
   }).filter(r => r.v != null).sort((a,b) => (b.r?.pctile||0) - (a.r?.pctile||0));
 
   const bests = Object.entries(p.best).filter(([,v]) => v);
@@ -248,6 +300,10 @@ function show(p){
         ${tiles.map(([v,k,s]) => `<div class="tile"><div class="v">${v}</div>
           <div class="k">${k}</div><div class="s">${s}</div></div>`).join("")}
       </div>
+      <h2 style="font-size:15px;margin:22px 0 0">Form — last ${recent.length} matches</h2>
+      <div class="form">${formHTML}</div>
+      <div class="streak">${streakTxt} · best run ${plural(p.bestWin||0, "win", "wins")},
+        worst ${plural(p.bestLoss||0, "loss", "losses")}</div>
     </div>
 
     <div class="split">
@@ -265,14 +321,19 @@ function show(p){
         <p class="muted" style="margin-top:-6px">Bar shows the percentile among the
           ${QUAL.length} characters with ${META.minGames}+ matches.</p>
         <table><thead><tr><th>Statistic</th><th class="n">per min</th>
-          <th class="barcell">percentile</th><th class="n">rank</th></tr></thead><tbody>
+          <th class="barcell">percentile</th><th class="n">rank</th>
+          ${useClass ? `<th class="n">vs ${p.class}s</th>` : ""}</tr></thead><tbody>
         ${rows.map(r => `<tr>
           <td>${LBL[r.k] || r.k}</td>
           <td class="n">${r.v >= 100 ? fmt(r.v) : r.v.toFixed(2)}</td>
           <td class="barcell"><div class="bar"><span style="width:${
               ((r.r?.pctile||0)*100).toFixed(0)}%;background:${col}"></span></div></td>
-          <td class="n">${r.r ? "#"+r.r.rank : "–"}</td></tr>`).join("")}
+          <td class="n">${r.r ? "#"+r.r.rank : "–"}</td>
+          ${useClass ? `<td class="n">${r.rc ? "#"+r.rc.rank+" of "+r.rc.of : "–"}</td>` : ""}
+        </tr>`).join("")}
         </tbody></table>
+        ${useClass ? "" : `<p class="muted">Too few ${p.class || "same-class"}
+          characters with ${META.minGames}+ matches for a class ranking.</p>`}
       </div>
 
     </div>
@@ -297,10 +358,99 @@ function show(p){
           <tr><td>Thin lobbies</td><td class="n">${pct(p.thinWr)}</td>
               <td class="n muted">${p.thinN} matches</td></tr>
         </tbody></table>
+
+        <h2>Other rates</h2>
+        <table><tbody>
+          <tr><td>Damage taken per death</td><td class="n">${fmt(p.takenPerDeath)}</td></tr>
+          <tr><td>Damage aimed at the enemy carrier</td>
+              <td class="n">${pct(p.objDamage)}</td></tr>
+          <tr><td>Healing aimed at own carrier</td>
+              <td class="n">${pct(p.objHealing)}</td></tr>
+          <tr><td>Matches left early</td><td class="n">${pct(p.desertRate)}</td></tr>
+        </tbody></table>
       </div>
+    </div>
+
+    <div class="split">
+      <div class="card">
+        <h2 style="margin-top:0">Faced most often</h2>
+        <p class="muted" style="margin-top:-6px">Record against opponents met at
+          least 6 times, most-played first.</p>
+        ${p.rivals.length ? `<table><thead><tr><th>Opponent</th><th class="n">W–L</th>
+          <th class="n">rate</th></tr></thead><tbody>
+          ${p.rivals.map(([n,wn,ls]) => `<tr><td>${n}</td>
+            <td class="n">${wn}–${ls}</td>
+            <td class="n">${pct(wn/(wn+ls))}</td></tr>`).join("")}
+          </tbody></table>` : `<p class="muted">Nobody met often enough yet.</p>`}
+      </div>
+
+      <div class="card">
+        <h2 style="margin-top:0">Played alongside</h2>
+        <p class="muted" style="margin-top:-6px">Record with team mates shared at
+          least 8 times, most-played first.</p>
+        ${p.allies.length ? `<table><thead><tr><th>Team mate</th><th class="n">W–L</th>
+          <th class="n">rate</th></tr></thead><tbody>
+          ${p.allies.map(([n,wn,ls]) => `<tr><td>${n}</td>
+            <td class="n">${wn}–${ls}</td>
+            <td class="n">${pct(wn/(wn+ls))}</td></tr>`).join("")}
+          </tbody></table>` : `<p class="muted">No regular team mates yet.</p>`}
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0">Game log</h2>
+      <p class="muted" style="margin-top:-6px">Every recorded match, newest first.
+        Click a column to sort.</p>
+      <div class="logwrap" id="logwrap"></div>
     </div>`;
+  renderLog(log);
   el.classList.remove("hidden");
   el.scrollIntoView({behavior:"smooth", block:"start"});
+}
+
+/* ---------- game log table ---------- */
+const LOG_COLS = [
+  ["Date",     r => dateOf(r[LF.at]),                        r => r[LF.at]],
+  ["Result",   r => resultCell(r),                           r => r[LF.win]],
+  ["Score",    r => `${r[LF.ownCaps]}–${r[LF.oppCaps]}`,     r => r[LF.ownCaps]-r[LF.oppCaps]],
+  ["Time",     r => dur(r[LF.seconds]),                      r => r[LF.seconds]],
+  ["Damage",   r => fmt(r[LF.damageDone]),                   r => r[LF.damageDone]],
+  ["Healing",  r => fmt(r[LF.healingDone]),                  r => r[LF.healingDone]],
+  ["On EFC",   r => fmt(r[LF.damageOnEFC]),                  r => r[LF.damageOnEFC]],
+  ["Caps",     r => r[LF.flagCaptures] || "",                r => r[LF.flagCaptures]],
+  ["Returns",  r => r[LF.flagReturns] || "",                 r => r[LF.flagReturns]],
+  ["Carried",  r => r[LF.flagCarryTime] ? dur(r[LF.flagCarryTime]) : "", r => r[LF.flagCarryTime]],
+  ["KB",       r => r[LF.killingBlows] || "",                r => r[LF.killingBlows]],
+  ["Deaths",   r => r[LF.deaths] || "",                      r => r[LF.deaths]],
+];
+function resultCell(r){
+  const v = r[LF.win];
+  const t = v > 0 ? "Win" : v < 0 ? "Loss" : "Draw";
+  const left = r[LF.deserted] ? ` <span class="pill">left</span>` : "";
+  return `<span class="res ${v>0?"w":v<0?"l":""}">${t}</span>${left}`;
+}
+let logRows = [], logSort = {col: 0, dir: -1};
+function renderLog(rows){
+  logRows = rows.slice();
+  logSort = {col: 0, dir: -1};              // newest first
+  drawLog();
+}
+function drawLog(){
+  const {col, dir} = logSort;
+  const key = LOG_COLS[col][2];
+  const sorted = logRows.slice().sort((a, b) => (key(a) - key(b)) * dir);
+  document.getElementById("logwrap").innerHTML =
+    `<table><thead><tr>${LOG_COLS.map((c, i) =>
+       `<th class="${i ? "n" : ""}" data-c="${i}">${c[0]}${
+          i === col ? (dir > 0 ? " ▲" : " ▼") : ""}</th>`).join("")}</tr></thead>
+     <tbody>${sorted.map(r => `<tr>${LOG_COLS.map((c, i) =>
+       `<td class="${i ? "n" : ""}">${c[1](r)}</td>`).join("")}</tr>`).join("")}
+     </tbody></table>`;
+  document.querySelectorAll("#logwrap th").forEach(th => th.onclick = () => {
+    const i = +th.dataset.c;
+    logSort = {col: i, dir: logSort.col === i ? -logSort.dir : -1};
+    drawLog();
+  });
 }
 
 /* ---------- report gallery ---------- */

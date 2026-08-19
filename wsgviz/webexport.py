@@ -13,8 +13,16 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from . import data
+from . import data, rating
 from .context import Ctx
+
+# One match of one character, as a fixed array of integers. Field names travel
+# once in `logFields` instead of on every one of the 7,000+ entries - that is
+# what keeps the complete history under 150 KB gzipped.
+LOG_FIELDS = ["at", "win", "ownCaps", "oppCaps", "seconds", "damageDone",
+              "healingDone", "damageOnEFC", "healsOnFC", "flagCaptures",
+              "flagReturns", "flagCarryTime", "killingBlows", "deaths",
+              "honorableKills", "deserted"]
 
 # Per-character totals worth shipping. Keys stay as the raw column names so the
 # page can look up a label from STAT_LABELS without a second mapping.
@@ -41,14 +49,58 @@ BEST_STATS = [
 
 
 def _clean(value):
-    """JSON has no NaN. Missing stays missing."""
-    if value is None or (isinstance(value, float) and not np.isfinite(value)):
+    """JSON has no NaN, and no need for 15 decimals of a win rate.
+
+    Rounding matters for size as much as tidiness: an unrounded float costs
+    ~18 characters per value, across thousands of values.
+    """
+    if value is None:
         return None
-    if isinstance(value, (np.integer,)):
+    if isinstance(value, (np.integer, int)) and not isinstance(value, bool):
         return int(value)
-    if isinstance(value, (np.floating,)):
-        return round(float(value), 4)
+    if isinstance(value, (np.floating, float)):
+        f = float(value)
+        return None if not np.isfinite(f) else round(f, 4)
     return value
+
+
+def _game_log(ctx: Ctx) -> dict[int, list[list[int]]]:
+    """Complete match history per character, oldest first."""
+    m = ctx.matches
+    g = ctx.wsg.sort_values("at").copy()
+    # Which side's captures were the character's own?
+    own = np.where(g["team"] == 0, g["eventId"].map(m["caps_team0"]),
+                   g["eventId"].map(m["caps_team1"]))
+    opp = np.where(g["team"] == 0, g["eventId"].map(m["caps_team1"]),
+                   g["eventId"].map(m["caps_team0"]))
+    g["ownCaps"], g["oppCaps"] = own, opp
+    g["at"] = (g["at"] // 1000).astype("int64")     # seconds are precise enough
+    # -1 loss, 0 draw, 1 win, so the log can show a drawn round as such.
+    g["win"] = np.where(g["draw"], 0, np.where(g["win"] == 1, 1, -1))
+    g["seconds"] = g["timePlayed"]
+
+    out: dict[int, list[list[int]]] = {}
+    frame = g[["playerGuid"] + LOG_FIELDS].fillna(0)
+    for guid, sub in frame.groupby("playerGuid", sort=False):
+        out[int(guid)] = sub[LOG_FIELDS].astype("int64").to_numpy().tolist()
+    return out
+
+
+def _relations(ctx: Ctx, names: pd.Series) -> tuple[dict, dict]:
+    """Top opponents and team mates per character, best record first."""
+    dec = ctx.wsg[~ctx.wsg["draw"]]
+    rivals: dict[int, list] = {}
+    allies: dict[int, list] = {}
+    for table, key, sink in ((rating.head_to_head(dec), "opponent", rivals),
+                             (rating.duos(dec), "mate", allies)):
+        table = table[table[key].isin(names.index)]
+        for guid, sub in table.groupby("playerGuid"):
+            sub = sub.assign(rate=sub["won"] / sub["played"])
+            sub = sub.sort_values(["played", "rate"], ascending=False).head(6)
+            sink[int(guid)] = [
+                [names.get(r[key]), int(r["won"]), int(r["lost"])]
+                for _, r in sub.iterrows()]
+    return rivals, allies
 
 
 def build_payload(ctx: Ctx, chart_files: list[str] | None = None) -> dict:
@@ -57,6 +109,12 @@ def build_payload(ctx: Ctx, chart_files: list[str] | None = None) -> dict:
 
     days_active = w.groupby("playerGuid")["date"].nunique()
     best = w.groupby("playerGuid")[BEST_STATS].max()
+    first_seen = w.groupby("playerGuid")["ts"].min()
+    last_seen = w.groupby("playerGuid")["ts"].max()
+    elo = rating.elo_ratings(dec)
+    runs = rating.streaks(dec)
+    log = _game_log(ctx)
+    rivals, allies = _relations(ctx, tot["player"])
 
     # Contested vs thin lobby split - the headline comparison of the deck.
     m = ctx.matches
@@ -95,6 +153,19 @@ def build_payload(ctx: Ctx, chart_files: list[str] | None = None) -> dict:
         rec["objDamage"] = _clean(dmg_efc / dmg) if dmg else None
         heal, heal_fc = row.get("healingDone_sum", 0), row.get("healsOnFC_sum", 0)
         rec["objHealing"] = _clean(heal_fc / heal) if heal else None
+        deaths = row.get("deaths_sum", 0)
+        rec["kd"] = _clean(row.get("killingBlows_sum", 0) / deaths) if deaths else None
+        rec["takenPerDeath"] = _clean(row.get("damageTaken_sum", 0) / deaths) if deaths else None
+
+        rec["elo"] = _clean(elo.get(guid))
+        if guid in runs.index:
+            rec["streak"] = int(runs.loc[guid, "current"])
+            rec["bestWin"] = int(runs.loc[guid, "best_win"])
+            rec["bestLoss"] = int(runs.loc[guid, "best_loss"])
+        rec["firstSeen"] = first_seen[guid].strftime("%Y-%m-%d")
+        rec["lastSeen"] = last_seen[guid].strftime("%Y-%m-%d")
+        rec["rivals"] = rivals.get(int(guid), [])
+        rec["allies"] = allies.get(int(guid), [])
 
         for kind in ("contested", "thin"):
             if (guid, kind) in split.index:
@@ -134,6 +205,8 @@ def build_payload(ctx: Ctx, chart_files: list[str] | None = None) -> dict:
         "classOrder": data.CLASS_ORDER,
         "classes": classes,
         "players": players,
+        "logFields": LOG_FIELDS,
+        "log": log,
         "charts": chart_files or [],
     }
 
