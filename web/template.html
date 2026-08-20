@@ -199,6 +199,10 @@ function readable(hex){
 
 /* ---------- ranking helpers ---------- */
 function rankOf(player, get, pool){
+  // Someone outside the pool gets no rank rather than a flattering one. A rate
+  // over 12 matches is not comparable with a pool that demands 20, and with
+  // nobody above them an unqualified character would come out #1.
+  if (!pool.some(x => x.id === player.id)) return null;
   const vals = pool.map(get).filter(v => v != null);
   const mine = get(player);
   if (mine == null || !vals.length) return null;
@@ -343,13 +347,15 @@ function show(p){
                   : p.streak < 0 ? plural(-p.streak, "loss", "losses") + " in a row"
                   : "no current run";
 
+  const ranked = QUAL.some(x => x.id === p.id);
   const pool = classPool(p.class);
-  const useClass = pool.length >= MIN_CLASS_POOL;
+  const useClass = ranked && pool.length >= MIN_CLASS_POOL;
   const rows = RANKED.map(k => {
     const r = rankOf(p, x => x.pm[k], QUAL);
     const rc = useClass ? rankOf(p, x => x.pm[k], pool) : null;
     return {k, v: p.pm[k], r, rc};
-  }).filter(r => r.v != null).sort((a,b) => (b.r?.pctile||0) - (a.r?.pctile||0));
+  }).filter(r => r.v != null);
+  if (ranked) rows.sort((a, b) => (b.r?.pctile || 0) - (a.r?.pctile || 0));
 
   const bests = Object.entries(p.best).filter(([,v]) => v);
   const profile = PROFILE.map(([k, label]) => ({
@@ -376,31 +382,41 @@ function show(p){
     <div class="split">
       <div class="card">
         <h2 style="margin-top:0">Profile</h2>
-        <p class="muted" style="margin-top:-6px">Each axis is this character's
-          percentile among the ${QUAL.length} with ${META.minGames}+ matches — the
-          outer ring is the highest value in the pool. Read each spoke on its own.</p>
+        ${ranked ? `<p class="muted" style="margin-top:-6px">Each axis is this
+          character's percentile among the ${QUAL.length} with ${META.minGames}+
+          matches — the outer ring is the highest value in the pool. Read each spoke
+          on its own.</p>
         ${radarSVG(profile, col, 300)}
-        <p class="muted" style="margin-top:10px">${PROFILE_KEY}. All per minute played.</p>
+        <p class="muted" style="margin-top:10px">${PROFILE_KEY}. All per minute
+          played.</p>`
+        : `<p class="muted" style="margin-top:-6px">The profile places a character
+          against everyone with ${META.minGames}+ matches. ${p.name} has
+          ${p.games}, so there is nothing here to compare against yet — a rate over
+          a handful of matches swings too far to rank.</p>`}
       </div>
 
       <div class="card">
-        <h2 style="margin-top:0">Per minute, against the field</h2>
-        <p class="muted" style="margin-top:-6px">Bar shows the percentile among the
-          ${QUAL.length} characters with ${META.minGames}+ matches.</p>
+        <h2 style="margin-top:0">${ranked ? "Per minute, against the field"
+                                            : "Per minute"}</h2>
+        <p class="muted" style="margin-top:-6px">${ranked
+          ? `Bar shows the percentile among the ${QUAL.length} characters with
+             ${META.minGames}+ matches.`
+          : `Ranking needs ${META.minGames}+ matches and ${p.name} has ${p.games},
+             so these are the raw rates without a placing.`}</p>
         <table><thead><tr><th>Statistic</th><th class="n">per min</th>
-          <th class="barcell">percentile</th><th class="n">rank</th>
+          ${ranked ? `<th class="barcell">percentile</th><th class="n">rank</th>` : ""}
           ${useClass ? `<th class="n">vs ${p.class}s</th>` : ""}</tr></thead><tbody>
         ${rows.map(r => `<tr>
           <td>${LBL[r.k] || r.k}</td>
           <td class="n">${r.v >= 100 ? fmt(r.v) : r.v.toFixed(2)}</td>
-          <td class="barcell"><div class="bar"><span style="width:${
+          ${ranked ? `<td class="barcell"><div class="bar"><span style="width:${
               ((r.r?.pctile||0)*100).toFixed(0)}%;background:${col}"></span></div></td>
-          <td class="n">${r.r ? "#"+r.r.rank : "–"}</td>
+          <td class="n">${r.r ? "#"+r.r.rank : "–"}</td>` : ""}
           ${useClass ? `<td class="n">${r.rc ? "#"+r.rc.rank+" of "+r.rc.of : "–"}</td>` : ""}
         </tr>`).join("")}
         </tbody></table>
-        ${useClass ? "" : `<p class="muted">Too few ${p.class || "same-class"}
-          characters with ${META.minGames}+ matches for a class ranking.</p>`}
+        ${ranked && !useClass ? `<p class="muted">Too few ${p.class || "same-class"}
+          characters with ${META.minGames}+ matches for a class ranking.</p>` : ""}
       </div>
 
     </div>
