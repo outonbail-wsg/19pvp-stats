@@ -7,7 +7,12 @@ name: Publish WSG stats
 on:
   workflow_dispatch:          # run it by hand from the Actions tab
   schedule:
-    - cron: "17 4 * * *"      # daily, 04:17 UTC
+    # Every six hours. The minute is deliberately not :00 - scheduled runs queue
+    # behind everyone else's at the top of the hour and get delayed the most.
+    # Hours listed rather than */6: that would fire on hours divisible by six and
+    # put the last run of the day at 20:17 CEST, mid-evening. 22:17 UTC lands
+    # just after the European session instead.
+    - cron: "17 4,10,16,22 * * *"   # 06:17, 12:17, 18:17, 00:17 CEST
   push:
     branches: [main]
     paths:

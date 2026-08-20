@@ -204,7 +204,9 @@ python make_charts.py --lobby contested --outdir output-contested
 ```
 
 **Auto-updating.** `.github/workflows/publish.yml` rebuilds and deploys to GitHub
-Pages daily. Both Pages and Actions are free for public repositories. To make it
+Pages every six hours, at 04:17, 10:17, 16:17 and 22:17 UTC — the last of those
+lands just after the European evening, which is when the bracket is busiest.
+Both Pages and Actions are free for public repositories. To make it
 self-refreshing, set a repository variable `LEADERBOARD_CSV_URL` to the raw export
 endpoint; without it the workflow just rebuilds from the CSV in `Data/`.
 
