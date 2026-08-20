@@ -148,43 +148,55 @@ def leaderboard_winrate(ctx: Ctx):
 
 
 def leaderboard_activity(ctx: Ctx):
-    """Who plays the most - by matches, hours and days shown up.
+    """Who plays the most - by matches, hours, days shown up, and losses taken.
 
     Desertions have their own board; repeating them here would double-count the
     same story.
     """
     tot = ctx.totals.copy()
     tot["days_active"] = ctx.wsg.groupby("playerGuid")["date"].nunique()
+    tot["losses"] = tot["games_decided"] - tot["wins"]
 
-    fig = plt.figure(figsize=(13.5, 5.8))
-    top = T.figure_title(fig, "WSG leaderboards: activity",
-                         f"Top {TOP_N} by matches, hours played and days active")
+    fig = plt.figure(figsize=(16, 5.8))
+    top = T.figure_title(
+        fig, "WSG leaderboards: activity",
+        f"Top {TOP_N} by matches, hours played, days active and matches lost")
     bottom = T.footnote(fig, ctx.source_note(
-        "'Days active' counts distinct calendar days the character appeared in."))
+        "'Days active' counts distinct calendar days the character appeared in. The "
+        "loss board tracks the match board closely - nobody collects losses without "
+        "queueing for them - so read it as volume, not as a verdict; win rate has its "
+        "own board."))
     xb = T.xband(fig)
     h = top - bottom - xb
-    w = 0.21
+    w = 0.155
 
-    ax1 = fig.add_axes([0.09, bottom + xb, w, h])
+    ax1 = fig.add_axes([0.075, bottom + xb, w, h])
     t1 = tot.nlargest(TOP_N, "games")
     H.top_hbar(ax1, t1["player"], t1["games"].to_numpy(), value_fmt=T.num,
                colors=H.class_colors(t1["class_name"]),
                label_colors=H.class_text_colors(t1["class_name"]),
                title="Most matches")
 
-    ax2 = fig.add_axes([0.42, bottom + xb, w, h])
+    ax2 = fig.add_axes([0.32, bottom + xb, w, h])
     t2 = tot.nlargest(TOP_N, "minutes")
     H.top_hbar(ax2, t2["player"], (t2["minutes"] / 60).to_numpy(),
                colors=H.class_colors(t2["class_name"]),
                label_colors=H.class_text_colors(t2["class_name"]),
                value_fmt=lambda v: T.num(v, 1) + " h", title="Most hours played")
 
-    ax3 = fig.add_axes([0.75, bottom + xb, w, h])
+    ax3 = fig.add_axes([0.565, bottom + xb, w, h])
     t3 = tot.nlargest(TOP_N, "days_active")
     H.top_hbar(ax3, t3["player"], t3["days_active"].to_numpy(),
                colors=H.class_colors(t3["class_name"]),
                label_colors=H.class_text_colors(t3["class_name"]), value_fmt=T.num,
                title="Most days active")
+
+    ax4 = fig.add_axes([0.81, bottom + xb, w, h])
+    t4 = tot.nlargest(TOP_N, "losses")
+    H.top_hbar(ax4, t4["player"], t4["losses"].to_numpy(),
+               colors=H.class_colors(t4["class_name"]),
+               label_colors=H.class_text_colors(t4["class_name"]), value_fmt=T.num,
+               title="Most matches lost")
     return fig
 
 

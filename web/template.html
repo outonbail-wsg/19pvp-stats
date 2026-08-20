@@ -36,6 +36,12 @@
 
   /* ---- player card ---- */
   .who{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:2px}
+  .views{display:flex;gap:8px;margin:0 0 20px;border-bottom:1px solid var(--grid)}
+  .views button{border:0;border-bottom:2px solid transparent;background:none;
+                color:var(--ink2);padding:8px 2px;margin-right:16px;font-size:15px;
+                font-family:inherit;cursor:pointer}
+  .views button:hover{color:var(--ink)}
+  .views button.on{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
   .units{display:flex;gap:6px;margin:0 0 12px}
   .units button{border:1px solid var(--grid);background:var(--surface);color:var(--ink2);
                 border-radius:999px;padding:4px 11px;font-size:12.5px;
@@ -140,6 +146,7 @@
 
   <h1><button type="button" id="home">Warsong Gulch stats</button></h1>
   <p class="sub" id="period"></p>
+  <nav class="views" id="viewnav"></nav>
 
   <div class="card">
     <div class="search">
@@ -179,7 +186,7 @@ const LBL = DATA.statLabels;
    brings the rest back. P, QUAL and the chart list all follow it. */
 const HAS_CONTESTED = (DATA.playersContested || []).length > 0;
 let allLobbies = false;
-let P = [], QUAL = [], CHARTS = [], GROUPS = [];
+let P = [], QUAL = [], CHARTS = [], VIEWS = [];
 function applyScope(){
   const contested = HAS_CONTESTED && !allLobbies;
   const base = contested ? DATA.playersContested : DATA.players;
@@ -194,8 +201,8 @@ function applyScope(){
   QUAL = P.filter(p => p.games >= scopeMin());
   CHARTS = contested && DATA.chartsContested.length
          ? DATA.chartsContested : DATA.charts;
-  GROUPS = (contested && DATA.chartsContested.length
-         ? DATA.chartGroupsContested : DATA.chartGroups) || [];
+  VIEWS = (contested && DATA.chartsContested.length
+        ? DATA.chartViewsContested : DATA.chartViews) || [];
 }
 
 /* ---------- formatting ---------- */
@@ -716,13 +723,16 @@ function renderGallery(){
     return;
   }
   const dir = chartDir();
-  const secs = GROUPS.length ? GROUPS : [{name: "", charts: CHARTS.map(chartStem)}];
+  const v = VIEWS.find(x => x.slug === view) || VIEWS[0];
+  const secs = v ? v.sections : [{name: "", charts: CHARTS.map(chartStem)}];
 
-  // data-i indexes the flat CHARTS array, not the section, so the lightbox
-  // arrows still walk the whole gallery across section boundaries.
+  // The lightbox walks the page the reader is on, not all 44 charts: arrows
+  // that carried on into a view they had not opened would be disorienting.
+  LBSET = secs.flatMap(g => g.charts).map(st => st + ".png");
+
   const tile = stem => {
     const f = stem + ".png";
-    return `<figure><a href="#" data-i="${CHARTS.indexOf(f)}">
+    return `<figure><a href="#" data-i="${LBSET.indexOf(f)}">
        <img loading="lazy" src="${dir}/${f}" alt="${chartLabel(f)}">
        <figcaption><b>${chartLabel(f)}</b><span>${chartBlurb(f)}</span></figcaption>
      </a></figure>`;
@@ -747,7 +757,7 @@ function renderGallery(){
 }
 
 /* ---------- lightbox: click a chart, then arrow through the set ---------- */
-let lbIndex = 0, lbEl = null;
+let lbIndex = 0, lbEl = null, LBSET = [];
 function openLightbox(i){
   lbIndex = i;
   if (!lbEl){
@@ -770,14 +780,14 @@ function openLightbox(i){
   drawLightbox();
 }
 function drawLightbox(){
-  const f = CHARTS[lbIndex];
+  const f = LBSET[lbIndex];
   lbEl.querySelector("img").src = `${chartDir()}/${f}`;
   lbEl.querySelector(".cap").innerHTML =
-    `<b>${chartLabel(f)}</b> — ${lbIndex + 1} of ${CHARTS.length}` +
+    `<b>${chartLabel(f)}</b> — ${lbIndex + 1} of ${LBSET.length}` +
     (chartBlurb(f) ? `<span>${chartBlurb(f)}</span>` : "");
 }
 function stepLightbox(d){
-  lbIndex = (lbIndex + d + CHARTS.length) % CHARTS.length;   // wraps both ways
+  lbIndex = (lbIndex + d + LBSET.length) % LBSET.length;     // wraps both ways
   drawLightbox();
 }
 function closeLightbox(){
@@ -809,6 +819,29 @@ document.addEventListener("touchend", e => {
 document.getElementById("period").textContent =
   `${META.matches} matches · ${META.characters} characters · ${META.periodLabel}`;
 // The site name is the way home: press it and the report is back, no character.
+/* ---------- the gallery pages ----------
+   One HTML file, several views. Separate files would each need their own copy
+   of the inlined payload, and the character search would only work on one of
+   them; hidden views cost nothing here because their images are lazy and never
+   requested until the view is opened. */
+let view = "boards";
+const viewNav = document.getElementById("viewnav");
+function renderViewNav(){
+  viewNav.innerHTML = VIEWS.map(v =>
+    `<button type="button" data-view="${v.slug}"${v.slug === view ? ' class="on"' : ""}
+     >${v.label}</button>`).join("");
+  viewNav.querySelectorAll("button").forEach(b => b.onclick = () => setView(b.dataset.view));
+}
+function setView(slug, {push = true} = {}){
+  if (!VIEWS.some(v => v.slug === slug)) return;
+  view = slug;
+  const hash = "#/" + slug;
+  if (push && location.hash !== hash) history.pushState(null, "", hash);
+  renderViewNav();
+  renderGallery();
+  closeLightbox();
+}
+
 /* ---------- the time-window switch ---------- */
 const scopeBar = document.getElementById("scopeBar");
 function renderScopeBar(){
@@ -848,6 +881,7 @@ if (!HAS_CONTESTED) box.closest(".switch").style.display = "none";
 box.onchange = () => {
   allLobbies = box.checked;
   applyScope();
+  renderViewNav();
   updateNote();
   renderGallery();
   closeLightbox();
@@ -879,6 +913,12 @@ function nameFromHash(){
   if (!h.startsWith("/c/")) return "";
   try { return decodeURIComponent(h.slice(3)); } catch (e) { return h.slice(3); }
 }
+// A view and a character are both addressable, and independent: opening someone
+// leaves the gallery on whatever page was already showing.
+function viewFromHash(){
+  const h = location.hash.replace(/^#\//, "");
+  return VIEWS.some(v => v.slug === h) ? h : "";
+}
 
 function openPlayer(p){
   const hash = charHash(p.name);
@@ -888,8 +928,14 @@ function openPlayer(p){
 }
 
 function route(){
-  const name = nameFromHash();
   const card = document.getElementById("card");
+  const v = viewFromHash();
+  if (v){
+    card.classList.add("hidden");
+    if (v !== view) setView(v, {push: false});
+    return;
+  }
+  const name = nameFromHash();
   if (!name){ card.classList.add("hidden"); return; }
 
   let p = P.find(x => x.name === name);
@@ -915,6 +961,8 @@ function route(){
 window.addEventListener("hashchange", route);
 
 applyScope();
+view = viewFromHash() || view;
+renderViewNav();
 renderScopeBar();
 updateNote();
 renderGallery();

@@ -30,28 +30,9 @@ pip install -r requirements.txt
 
 ## The charts
 
-44 charts in ten sections; the gallery on the published page uses the
-same grouping and the file numbers follow it.
+44 charts. The published page splits them across **Leaderboards** and **The bracket**; the file numbers follow the sections below.
 
-**The bracket**
-| # | Chart | What it shows |
-|---|-------|---------------|
-| 01 | overview | The headline counts for the whole period: matches, distinct characters, hours played and how the rounds ended |
-| 02 | bracket_population | Characters grouped by how many days they were active, and how much of all play each group accounts for |
-| 03 | participation | How many matches each character played, with a cumulative curve showing what share of all play the most active ones account for |
-| 04 | player_base | Active characters per day, split into returning and new |
-| 05 | activity_per_hour | Real players per match, share of full lobbies and match count, per hour |
-| 06 | activity_heatmap | Average real players per match for each weekday and hour |
-| 07 | activity_per_day | Recorded matches per calendar day, split by game mode |
-
-**Classes**
-| # | Chart | What it shows |
-|---|-------|---------------|
-| 08 | class_distribution | Distinct characters and recorded player-matches per class |
-| 09 | class_meta | Each class placed by how often it is played against how often it wins |
-| 10 | team_composition | The average number of each class per team, and how often a team fields the class at all |
-| 11 | class_winrate | Share of decided player-matches spent on the winning side, per class |
-| 12 | class_matrix | All classes against nine statistics |
+### Leaderboards
 
 **The flag**
 | # | Chart | What it shows |
@@ -74,9 +55,37 @@ same grouping and the file numbers follow it.
 | 20 | leaders_utility | Top characters by total across the utility statistics - interrupts, dispels and crowd control |
 | 21 | leaders_per_minute | The same kind of board as rates per minute played, so it does not simply reward whoever queued the most |
 | 22 | leaderboard_winrate | The highest win rates among characters with enough decided matches, each with an uncertainty band |
-| 23 | leaderboard_activity | Top characters by matches played, hours played and days active |
+| 23 | leaderboard_activity | Top characters by matches played, hours played, days active and matches lost |
 | 24 | role_map | Every qualified character placed by damage and healing per minute, coloured by class |
 | 25 | player_profiles | The eight most active characters as cards |
+
+**Standings**
+| # | Chart | What it shows |
+|---|-------|---------------|
+| 40 | power_ranking | Standings by power rating, with each character's record alongside |
+| 41 | class_boards | The five highest-rated characters of each class, on the same Elo rating as the power ranking - so beating strong opponents counts for more than beating weak ones |
+
+### The bracket
+
+**The bracket**
+| # | Chart | What it shows |
+|---|-------|---------------|
+| 01 | overview | The headline counts for the whole period: matches, distinct characters, hours played and how the rounds ended |
+| 02 | bracket_population | Characters grouped by how many days they were active, and how much of all play each group accounts for |
+| 03 | participation | How many matches each character played, with a cumulative curve showing what share of all play the most active ones account for |
+| 04 | player_base | Active characters per day, split into returning and new |
+| 05 | activity_per_hour | Real players per match, share of full lobbies and match count, per hour |
+| 06 | activity_heatmap | Average real players per match for each weekday and hour |
+| 07 | activity_per_day | Recorded matches per calendar day, split by game mode |
+
+**Classes**
+| # | Chart | What it shows |
+|---|-------|---------------|
+| 08 | class_distribution | Distinct characters and recorded player-matches per class |
+| 09 | class_meta | Each class placed by how often it is played against how often it wins |
+| 10 | team_composition | The average number of each class per team, and how often a team fields the class at all |
+| 11 | class_winrate | Share of decided player-matches spent on the winning side, per class |
+| 12 | class_matrix | All classes against nine statistics |
 
 **Matches and lobbies**
 | # | Chart | What it shows |
@@ -104,21 +113,12 @@ same grouping and the file numbers follow it.
 | 38 | rivalries | Head-to-head record between the ten most active characters, and the longest winning and losing runs anyone put together |
 | 39 | first_match | Share of new characters still playing after N matches, split by whether they won or lost their very first one |
 
-**Standings**
-| # | Chart | What it shows |
-|---|-------|---------------|
-| 40 | power_ranking | Standings by power rating, with each character's record alongside |
-| 41 | class_boards | The five highest-rated characters of each class, on the same Elo rating as the power ranking - so beating strong opponents counts for more than beating weak ones |
-
 **Arena**
 | # | Chart | What it shows |
 |---|-------|---------------|
 | 42 | 2v2_overview | Scope of the arena 2v2 bracket in this export |
 | 43 | 2v2_leaderboards | Top 2v2 characters by total across the combat statistics |
 | 44 | 2v2_winrate | The highest 2v2 win rates among characters with enough decided matches |
-
-3v3 is not charted: 5 matches across 7 characters is too little to read.
-
 ### Conventions
 
 - **Class colours** are the official WoW ones and carry no legend — the audience
@@ -181,8 +181,9 @@ Builds `site/` — a static folder with no backend and no running costs:
 - `index.html` — player search plus the full chart gallery. The data is **inlined**,
   so the file works opened by double-click, served from GitHub Pages, or copied to
   any static host. No `fetch`, no CORS, no database. Click a chart to open it full
-  size and arrow (or swipe) through the set; each one carries a short explanation
-  from `wsgviz/descriptions.py`, which the build checks for gaps.
+  size and arrow (or swipe) through the set — the arrows stay within the gallery
+  page being read. Each chart carries a short explanation from
+  `wsgviz/descriptions.py`, which the build checks for gaps.
 - `charts/` and `charts-contested/` — the PNGs, rendered twice
 - `stats.json` — the same aggregates as a standalone file, for anyone who wants them
 
@@ -216,6 +217,24 @@ is added to the pool and does get a placing — seeing where you stand is the po
 of the page — but the card says plainly that the ranking is provisional and why.
 The pool is the same one the charts use, so a card and a chart can never name a
 different leader.
+
+**Two gallery pages, one file.** The report is split into *Leaderboards* (who is
+best at what) and *The bracket* (how the game and the scene work), addressed as
+`…/#/boards` and `…/#/bracket`. Separate HTML files would each need their own copy
+of the inlined payload and the character search would only work on one of them;
+hidden views cost nothing here because their images are lazy and never requested
+until the view is opened. The split is declared in `descriptions.VIEWS` and built
+from the same `GROUPS` list the numbering follows, so a chart cannot land in a
+section no page shows.
+
+**Time windows.** The page reads *All time*, *Last 7 days* or *Today*, rebuilt in
+the browser from the match log that already ships in the payload rather than from
+a second and third set of pre-aggregated totals. The window anchors on the newest
+match that passes the lobby filter, not the newest in the file — contested play
+can stop a day before bot-filled play does. Power rating, head-to-head and
+team-mate records have no windowed form (they need every match in order, or the
+other side of each match) and say so instead of showing an all-time figure under a
+seven-day heading. The match threshold drops with the window: 10, 5, 3.
 
 **Linkable characters.** A character view has its own address, `…/#/c/Name`, so a
 player can bookmark their page or post it. Close it with the button on the card or

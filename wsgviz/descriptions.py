@@ -161,7 +161,9 @@ CHART_INFO: dict[str, tuple[str, str]] = {
         "with an uncertainty band."),
     "23_leaderboard_activity": (
         "Most active",
-        "Top characters by matches played, hours played and days active."),
+        "Top characters by matches played, hours played, days active and matches "
+        "lost. The loss board is largely a volume board: nobody collects losses "
+        "without queueing for them."),
     "24_role_map": (
         "Damage vs healing",
         "Every qualified character placed by damage and healing per minute, coloured "
@@ -247,6 +249,39 @@ GROUPS: list[tuple[str, list[str]]] = [
     ("Arena", [
         "42_2v2_overview", "43_2v2_leaderboards", "44_2v2_winrate"]),
 ]
+
+
+# The gallery is split across pages so no single view is a wall of 44 images.
+# The line is who the chart is about: a board ranks characters, the bracket
+# describes the game and the scene they play it in. Arena rides along with the
+# bracket - three charts do not carry a page of their own.
+VIEWS: list[tuple[str, str, list[str]]] = [
+    ("boards", "Leaderboards",
+     ["The flag", "Control", "Leaderboards", "Standings"]),
+    ("bracket", "The bracket",
+     ["The bracket", "Classes", "Matches and lobbies",
+      "What separates wins from losses", "Records and rivalries", "Arena"]),
+]
+
+
+def views(stems) -> list[dict]:
+    """The pages, each carrying the sections that belong to it.
+
+    Driven by the same GROUPS list the numbering follows, so a chart cannot end
+    up in a section that no page shows: anything unplaced lands in a trailing
+    view rather than disappearing.
+    """
+    sections = {g["name"]: g for g in grouped(stems)}
+    out, placed = [], set()
+    for slug, label, names in VIEWS:
+        secs = [sections[n] for n in names if n in sections]
+        if secs:
+            out.append({"slug": slug, "label": label, "sections": secs})
+            placed.update(n for n in names if n in sections)
+    rest = [g for n, g in sections.items() if n not in placed]
+    if rest:
+        out.append({"slug": "more", "label": "More", "sections": rest})
+    return out
 
 
 def grouped(stems) -> list[dict]:
