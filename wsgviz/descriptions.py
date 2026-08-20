@@ -256,11 +256,11 @@ GROUPS: list[tuple[str, list[str]]] = [
 # describes the game and the scene they play it in. Arena rides along with the
 # bracket - three charts do not carry a page of their own.
 VIEWS: list[tuple[str, str, list[str]]] = [
-    ("boards", "Leaderboards",
-     ["The flag", "Control", "Leaderboards", "Standings"]),
     ("bracket", "The bracket",
      ["The bracket", "Classes", "Matches and lobbies",
       "What separates wins from losses", "Records and rivalries", "Arena"]),
+    ("boards", "Leaderboards",
+     ["The flag", "Control", "Leaderboards", "Standings"]),
 ]
 
 

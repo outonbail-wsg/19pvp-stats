@@ -36,6 +36,34 @@
 
   /* ---- player card ---- */
   .who{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:2px}
+  .ticker{display:flex;align-items:center;gap:10px;min-height:26px;margin:14px 0 18px;
+          font-size:14.5px;color:var(--ink2)}
+  .ticker b{color:var(--ink);font-weight:600}
+  .ticker .line{transition:opacity .35s ease}
+  .ticker .dots{display:flex;gap:4px;margin-left:auto}
+  .ticker .dots i{width:5px;height:5px;border-radius:50%;background:var(--axis);
+                  display:block}
+  .ticker .dots i.on{background:var(--ink2)}
+  .controls{display:flex;align-items:center;gap:22px;flex-wrap:wrap;margin:0 0 10px}
+  .controls .units{margin:0}
+  .controls .switch{margin:0}
+  .page.hidden{display:none}
+  .classpick{display:flex;flex-wrap:wrap;gap:6px}
+  .classpick button{border:1px solid var(--grid);background:var(--surface);
+                    border-radius:999px;padding:5px 12px;font-size:12.5px;
+                    font-family:inherit;cursor:pointer}
+  .classpick button.on{border-width:2px;padding:4px 11px;font-weight:600}
+  .boards{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px;
+          margin-top:18px}
+  .board{background:var(--surface);border:1px solid var(--grid);
+         border-radius:var(--radius);padding:12px 14px}
+  .board h4{margin:0 0 8px;font-size:13.5px;font-weight:600;color:var(--ink)}
+  .board ol{margin:0;padding:0;list-style:none;counter-reset:r}
+  .board li{display:flex;align-items:baseline;gap:8px;padding:3px 0;font-size:13px;
+            counter-increment:r}
+  .board li::before{content:counter(r);color:var(--muted);font-size:11px;min-width:12px}
+  .board li .nm{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .board li .v{margin-left:auto;color:var(--ink2);white-space:nowrap}
   .views{display:flex;gap:8px;margin:0 0 20px;border-bottom:1px solid var(--grid)}
   .views button{border:0;border-bottom:2px solid transparent;background:none;
                 color:var(--ink2);padding:8px 2px;margin-right:16px;font-size:15px;
@@ -146,30 +174,46 @@
 
   <h1><button type="button" id="home">Warsong Gulch stats</button></h1>
   <p class="sub" id="period"></p>
+
+  <div class="ticker" id="ticker"></div>
+
   <nav class="views" id="viewnav"></nav>
 
-  <div class="card">
-    <div class="search">
-      <input type="search" id="q" placeholder="Type a character name…" autocomplete="off"
-             aria-label="Character name">
-      <button id="go">Show stats</button>
-    </div>
-    <div class="hits" id="hits"></div>
-    <div class="units" id="scopeBar" style="margin:14px 0 0"></div>
+  <div class="controls">
+    <div class="units" id="scopeBar"></div>
     <label class="switch">
       <input type="checkbox" id="allLobbies">
       <span>Include lobbies the bots filled</span>
     </label>
-    <p class="muted" id="searchNote" style="margin:10px 0 0"></p>
   </div>
+  <p class="muted" id="searchNote" style="margin:0 0 22px"></p>
 
-  <div id="card" class="hidden"></div>
+  <section class="page hidden" id="pgCharts">
+    <p class="muted" id="galScope" style="margin:0 0 14px"></p>
+    <nav class="galnav" id="galnav"></nav>
+    <div class="gal" id="gal"></div>
+  </section>
 
-  <h2>Server report</h2>
-  <p class="sub">Every chart from the full analysis, regenerated with the data above.</p>
-  <p class="muted" id="galScope" style="margin:-8px 0 16px"></p>
-  <nav class="galnav" id="galnav"></nav>
-  <div class="gal" id="gal"></div>
+  <section class="page hidden" id="pgClasses">
+    <div class="card">
+      <div class="classpick" id="classPick"></div>
+      <div class="units" id="measureBar" style="margin:14px 0 0"></div>
+      <p class="muted" id="classNote" style="margin:10px 0 0"></p>
+    </div>
+    <div class="boards" id="classBoards"></div>
+  </section>
+
+  <section class="page hidden" id="pgCharacters">
+    <div class="card">
+      <div class="search">
+        <input type="search" id="q" placeholder="Type a character name…" autocomplete="off"
+               aria-label="Character name">
+        <button id="go">Show stats</button>
+      </div>
+      <div class="hits" id="hits"></div>
+    </div>
+    <div id="card" class="hidden"></div>
+  </section>
 
   <p class="muted" id="foot" style="margin-top:34px"></p>
 </div>
@@ -829,22 +873,203 @@ document.getElementById("period").textContent =
    of the inlined payload, and the character search would only work on one of
    them; hidden views cost nothing here because their images are lazy and never
    requested until the view is opened. */
-let view = "boards";
+let view = "bracket";
 const viewNav = document.getElementById("viewnav");
+const PAGE_EL = {charts: "pgCharts", classes: "pgClasses", search: "pgCharacters"};
+
+// Two of the pages are galleries of rendered images and come from the payload;
+// the other two are built here from the same records the character card uses,
+// which is why they can be filtered and the images cannot.
+function pages(){
+  return [...VIEWS.map(v => ({slug: v.slug, label: v.label, kind: "charts"})),
+          {slug: "classes", label: "By class", kind: "classes"},
+          {slug: "characters", label: "Characters", kind: "search"}];
+}
+const pageOf = slug => pages().find(p => p.slug === slug);
+
 function renderViewNav(){
-  viewNav.innerHTML = VIEWS.map(v =>
-    `<button type="button" data-view="${v.slug}"${v.slug === view ? ' class="on"' : ""}
-     >${v.label}</button>`).join("");
+  viewNav.innerHTML = pages().map(p =>
+    `<button type="button" data-view="${p.slug}"${p.slug === view ? ' class="on"' : ""}
+     >${p.label}</button>`).join("");
   viewNav.querySelectorAll("button").forEach(b => b.onclick = () => setView(b.dataset.view));
 }
 function setView(slug, {push = true} = {}){
-  if (!VIEWS.some(v => v.slug === slug)) return;
+  const pg = pageOf(slug);
+  if (!pg) return;
   view = slug;
   const hash = "#/" + slug;
   if (push && location.hash !== hash) history.pushState(null, "", hash);
   renderViewNav();
-  renderGallery();
+  Object.values(PAGE_EL).forEach(id =>
+    document.getElementById(id).classList.add("hidden"));
+  document.getElementById(PAGE_EL[pg.kind]).classList.remove("hidden");
+  if (pg.kind === "charts") renderGallery();
+  if (pg.kind === "classes") renderClassBoards();
   closeLightbox();
+}
+
+/* ---------- the rotating fact strip ----------
+   Three kinds of line, each read over three windows: who leads a statistic, who
+   has lost the most, and the best single match anyone played. All of it comes
+   out of the same windowed records the rest of the page uses, so nothing is
+   pre-computed for the strip alone. It follows the lobby switch but keeps its
+   own windows - the point is that it says "today" while you read an all-time
+   board. */
+const TICK_STATS = ["flagCaptures", "flagReturns", "damageOnEFC", "healsOnFC",
+  "successfulInterrupts", "hardCCDuration", "killingBlows", "damageDone",
+  "healingDone", "flagCarryTime"];
+const TICK_WINDOWS = [["today", "today", 1], ["this week", "this week", 7],
+                      ["all time", "all time", null]];
+// Chart labels are column headings - "Hard CC (duration)" - and read badly in
+// the middle of a sentence, so the strip has its own phrasing.
+const TICK_PHRASE = {
+  flagCaptures: "flag captures", flagReturns: "flag returns",
+  flagCarryTime: "time carrying the flag",
+  damageOnEFC: "damage on the enemy flag carrier",
+  healsOnFC: "healing on their own flag carrier",
+  successfulInterrupts: "interrupts", hardCCDuration: "hard crowd control",
+  killingBlows: "killing blows", damageDone: "damage", healingDone: "healing",
+};
+const phrase = k => TICK_PHRASE[k] || (LBL[k] || k).toLowerCase();
+
+function recordsIn(days){
+  const contested = HAS_CONTESTED && !allLobbies;
+  const base = contested ? DATA.playersContested : DATA.players;
+  if (days == null) return base;
+  const anchor = lastTs(contested);
+  if (!anchor) return [];
+  const cut = Math.floor(anchor / DAY) * DAY - (days - 1) * DAY;
+  return base.map(p => {
+    const rows = (DATA.log[p.id] || DATA.log[String(p.id)] || [])
+      .filter(r => r[LF.at] >= cut && (!contested || r[LF.contested]));
+    return rows.length ? scopedRecord(p, rows) : null;
+  }).filter(Boolean);
+}
+
+function buildFacts(){
+  const out = [];
+  const val = (k, v) => SEC.has(k) ? dur(v) : fmt(v);
+  for (const [label, , days] of TICK_WINDOWS){
+    const recs = recordsIn(days);
+    if (!recs.length) continue;
+    for (const k of TICK_STATS){
+      const best = recs.reduce((a, b) => (b.sum[k] || 0) > (a.sum[k] || 0) ? b : a);
+      if ((best.sum[k] || 0) > 0)
+        out.push([`Most ${phrase(k)} ${label}: `, best, val(k, best.sum[k])]);
+    }
+    const loser = recs.reduce((a, b) =>
+      (b.decided - b.wins) > (a.decided - a.wins) ? b : a);
+    if (loser.decided - loser.wins > 0)
+      out.push([`Most matches lost ${label}: `, loser, fmt(loser.decided - loser.wins)]);
+  }
+  // Single-match records, which have no window: a best is a best.
+  const all = HAS_CONTESTED && !allLobbies ? DATA.playersContested : DATA.players;
+  for (const k of ["damageDone", "healingDone", "flagCarryTime", "damageOnEFC"]){
+    const best = all.reduce((a, b) => (b.best[k] || 0) > (a.best[k] || 0) ? b : a);
+    if ((best.best[k] || 0) > 0)
+      out.push([`Best single match for ${phrase(k)}: `, best,
+                val(k, best.best[k])]);
+  }
+  return out;
+}
+
+let FACTS = [], tickAt = 0, tickTimer = null;
+function renderTicker(){
+  FACTS = buildFacts();
+  const el = document.getElementById("ticker");
+  if (!FACTS.length){ el.innerHTML = ""; return; }
+  if (tickAt >= FACTS.length) tickAt = 0;
+  el.innerHTML = `<span class="line" id="tickLine"></span>
+    <span class="dots" id="tickDots"></span>`;
+  document.getElementById("tickDots").innerHTML =
+    FACTS.map(() => "<i></i>").join("");
+  drawTick();
+  if (tickTimer) clearInterval(tickTimer);
+  tickTimer = setInterval(() => { tickAt = (tickAt + 1) % FACTS.length; drawTick(); }, 5000);
+}
+function drawTick(){
+  const line = document.getElementById("tickLine");
+  if (!line) return;
+  const [label, p, value] = FACTS[tickAt];
+  line.innerHTML = `${label}<b style="color:${readable(classColor(p.class))}">${p.name}</b>
+    <span> — ${value}</span>`;
+  const dots = document.getElementById("tickDots").children;
+  for (let i = 0; i < dots.length; i++)
+    dots[i].className = i === tickAt ? "on" : "";
+  // Clicking the strip opens whoever it is talking about.
+  line.style.cursor = "pointer";
+  line.onclick = () => { const q = P.find(x => x.id === p.id); if (q) openPlayer(q); };
+}
+
+/* ---------- boards, filtered by class ----------
+   Built from the records rather than from the rendered charts: an image cannot
+   be narrowed to one class, and this is the page where a shaman wants to see
+   only shamans. Follows the same window and lobby switches as everything else. */
+const BOARD_STATS = ["flagCaptures", "flagReturns", "flagCarryTime", "attemptsOnFlag",
+  "damageOnEFC", "healsOnFC", "damageDone", "healingDone", "absorbsDone",
+  "damageTaken", "killingBlows", "honorableKills", "deaths", "successfulInterrupts",
+  "fakeCastInterrupts", "hardCCDuration", "softCCDuration", "dispelsOffensive",
+  "dispelsDefensive"];
+const MEASURES = [["sum", "total"], ["pm", "per minute"], ["pg", "per game"]];
+const BOARD_TOP = 5;
+let classFilter = "", measure = "sum";
+
+function boardValue(p, k){
+  if (measure === "sum") return p.sum[k];
+  if (measure === "pm") return p.pm[k];
+  return p.games ? (p.sum[k] ?? 0) / p.games : null;
+}
+// Totals are open to everyone; a rate over two matches would top every board,
+// so the rate measures keep the window's match threshold.
+const boardPool = () => (measure === "sum" ? P : QUAL)
+  .filter(p => !classFilter || p.class === classFilter);
+
+function renderClassPick(){
+  const seen = new Set(P.map(p => p.class).filter(Boolean));
+  const order = DATA.classOrder.filter(c => seen.has(c));
+  document.getElementById("classPick").innerHTML =
+    [["", "All classes", "var(--ink2)"]].concat(order.map(c =>
+      [c, c, readable(classColor(c))])).map(([v, lab, col]) =>
+      `<button type="button" data-class="${v}" style="color:${col}${
+        v === classFilter ? ";border-color:" + col : ""}"${
+        v === classFilter ? ' class="on"' : ""}>${lab}</button>`).join("");
+  document.getElementById("classPick").querySelectorAll("button").forEach(b =>
+    b.onclick = () => { classFilter = b.dataset.class; renderClassBoards(); });
+}
+
+function renderClassBoards(){
+  renderClassPick();
+  document.getElementById("measureBar").innerHTML = MEASURES.map(([m, lab]) =>
+    `<button type="button" data-measure="${m}"${m === measure ? ' class="on"' : ""}
+     >${lab}</button>`).join("");
+  document.getElementById("measureBar").querySelectorAll("button").forEach(b =>
+    b.onclick = () => { measure = b.dataset.measure; renderClassBoards(); });
+
+  const pool = boardPool();
+  document.getElementById("classNote").textContent =
+    `${pool.length} character${pool.length === 1 ? "" : "s"} in view`
+    + (classFilter ? ` playing ${classFilter}` : "")
+    + (measure === "sum" ? ", every character with a recorded match."
+       : `, needing ${scopeMin()}+ matches for a rate.`);
+
+  // A total is a count and prints as one; only the rate measures carry decimals.
+  const fmtFor = k => v => SEC.has(k) ? dur(v)
+    : measure === "sum" ? fmt(v)
+    : v >= 100 ? fmt(v) : v.toFixed(2);
+  const el = document.getElementById("classBoards");
+  if (!pool.length){
+    el.innerHTML = `<p class="muted">Nobody matches that filter in this window.</p>`;
+    return;
+  }
+  el.innerHTML = BOARD_STATS.map(k => {
+    const best = pool.map(p => [p, boardValue(p, k)])
+      .filter(([, v]) => v != null && v > 0)
+      .sort((a, b) => b[1] - a[1]).slice(0, BOARD_TOP);
+    if (!best.length) return "";
+    return `<div class="board"><h4>${LBL[k] || k}</h4><ol>${best.map(([p, v]) =>
+      `<li><span class="nm" style="color:${readable(classColor(p.class))}">${p.name}</span>
+       <span class="v">${fmtFor(k)(v)}</span></li>`).join("")}</ol></div>`;
+  }).join("");
 }
 
 /* ---------- the time-window switch ---------- */
@@ -864,6 +1089,8 @@ function renderScopeBar(){
     applyScope();
     renderScopeBar();
     updateNote();
+    renderTicker();
+    if (view === "classes") renderClassBoards();
     // Whoever is on screen is redrawn from the new window, or dropped if they
     // did not play in it at all.
     const shown = document.getElementById("card").dataset.player;
@@ -888,7 +1115,8 @@ box.onchange = () => {
   applyScope();
   renderViewNav();
   updateNote();
-  renderGallery();
+  renderTicker();
+  if (view === "classes") renderClassBoards(); else renderGallery();
   closeLightbox();
   // Redraw whatever character is on screen, now from the other slice.
   const shown = document.getElementById("card").dataset.player;
@@ -922,10 +1150,11 @@ function nameFromHash(){
 // leaves the gallery on whatever page was already showing.
 function viewFromHash(){
   const h = location.hash.replace(/^#\//, "");
-  return VIEWS.some(v => v.slug === h) ? h : "";
+  return pageOf(h) ? h : "";
 }
 
 function openPlayer(p){
+  if (view !== "characters") setView("characters", {push: false});
   const hash = charHash(p.name);
   if (location.hash !== hash) history.pushState(null, "", hash);
   show(p);
@@ -956,6 +1185,7 @@ function route(){
     }
   }
   if (!p){ card.classList.add("hidden"); return; }
+  if (view !== "characters") setView("characters", {push: false});
   if (card.dataset.player === p.name && !card.classList.contains("hidden")) return;
   q.value = p.name;
   hits.innerHTML = "";
@@ -966,11 +1196,10 @@ function route(){
 window.addEventListener("hashchange", route);
 
 applyScope();
-view = viewFromHash() || view;
-renderViewNav();
 renderScopeBar();
 updateNote();
-renderGallery();
+renderTicker();
+setView(viewFromHash() || view, {push: false});
 route();
 
 document.getElementById("foot").textContent =

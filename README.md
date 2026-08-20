@@ -218,14 +218,23 @@ of the page — but the card says plainly that the ranking is provisional and wh
 The pool is the same one the charts use, so a card and a chart can never name a
 different leader.
 
-**Two gallery pages, one file.** The report is split into *Leaderboards* (who is
-best at what) and *The bracket* (how the game and the scene work), addressed as
-`…/#/boards` and `…/#/bracket`. Separate HTML files would each need their own copy
-of the inlined payload and the character search would only work on one of them;
-hidden views cost nothing here because their images are lazy and never requested
-until the view is opened. The split is declared in `descriptions.VIEWS` and built
-from the same `GROUPS` list the numbering follows, so a chart cannot land in a
-section no page shows.
+**Four pages, one file.** *The bracket* (how the game and the scene work) and
+*Leaderboards* (who is best at what) are galleries of rendered charts, declared in
+`descriptions.VIEWS` and built from the same `GROUPS` list the numbering follows,
+so a chart cannot land in a section no page shows. *By class* and *Characters* are
+built in the browser from the shipped records instead — which is why they can be
+filtered and an image cannot. Each is addressable: `…/#/bracket`, `…/#/boards`,
+`…/#/classes`, `…/#/characters`.
+
+Separate HTML files would each need their own copy of the inlined payload and the
+character search would only work on one of them; hidden pages cost nothing here
+because their images are lazy and never requested until the page is opened.
+
+**A rotating strip** at the top carries one fact at a time: who leads a statistic,
+who has lost the most, and the best single match anyone played — the first two read
+over today, the last seven days and the whole period. Clicking it opens the
+character it names. Built from the same windowed records as everything else, so
+nothing is pre-computed for the strip alone.
 
 **Time windows.** The page reads *All time*, *Last 7 days* or *Today*, rebuilt in
 the browser from the match log that already ships in the payload rather than from
