@@ -70,6 +70,15 @@
     .tk-count{display:none}
   }
   .controls{display:flex;align-items:center;gap:22px;flex-wrap:wrap;margin:0 0 10px}
+  .daterange{display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--ink2)}
+  .daterange.hidden{display:none}
+  .daterange input{font-family:inherit;font-size:12.5px;padding:3px 7px;
+                   border:1px solid var(--grid);border-radius:var(--radius);
+                   background:var(--surface);color:var(--ink)}
+  .daterange button{border:1px solid var(--grid);background:var(--surface);
+                    color:var(--ink2);border-radius:999px;padding:4px 11px;
+                    font-size:12.5px;font-family:inherit;cursor:pointer}
+  .daterange button:hover{border-color:var(--accent);color:var(--accent)}
   .controls .units{margin:0}
   .controls .switch{margin:0}
   .page.hidden{display:none}
@@ -219,6 +228,11 @@
 
   <div class="controls">
     <div class="units" id="scopeBar"></div>
+    <div class="daterange hidden" id="dateRange">
+      <label>from <input type="date" id="dFrom"></label>
+      <label>to <input type="date" id="dTo"></label>
+      <button type="button" id="dReset">Whole period</button>
+    </div>
     <label class="switch">
       <input type="checkbox" id="allLobbies">
       <span>Include lobbies the bots filled</span>
@@ -357,12 +371,35 @@ const SCOPES = [
   {id: "all",       label: "All time",    days: null},
   {id: "week",      label: "Last 7 days", days: 7, min: 5},
   {id: "yesterday", label: "Yesterday",   days: 1, min: 3, offset: 1},
+  {id: "custom",    label: "Pick dates",  custom: true},
 ];
+
+/* The custom window is two dates rather than a preset, so its match threshold is
+   interpolated instead of looked up: three over a single day, the full bar over
+   the whole period. Anchoring the top end matters - picking every date by hand
+   has to give the same pool "All time" does, or the two disagree over identical
+   data. */
+const DAYSEC = d => Math.floor(Date.parse(d + "T00:00:00Z") / 1000);
+// A function, not a constant: DAY is declared further down and a const here
+// would read it before it exists.
+const periodDays = () => Math.max(1,
+  Math.round((DAYSEC(META.periodEnd) - DAYSEC(META.periodStart)) / 86400) + 1);
+// Seeded here, not when the picker first opens: the scope is applied before the
+// bar is redrawn, so empty dates made the first switch read as a one-day window
+// and take a one-day match threshold with it.
+let customFrom = META.periodStart, customTo = META.periodEnd;
+function customMin(days){
+  const total = periodDays();
+  if (total <= 1) return META.minGames;
+  const v = 3 + (days - 1) * (META.minGames - 3) / (total - 1);
+  return Math.max(2, Math.min(META.minGames, Math.round(v)));
+}
 let scope = "all";
 const scopeDef = () => SCOPES.find(x => x.id === scope) || SCOPES[0];
 // A short window cannot clear the full match threshold, so it carries a lower
 // one. Ranking three days of play against a 10-match bar would empty the pool.
-const scopeMin = () => scopeDef().min ?? META.minGames;
+const scopeMin = () => scopeDef().custom ? customMin(customDays())
+                     : (scopeDef().min ?? META.minGames);
 
 /* ---------- game log ---------- */
 const LF = {};
@@ -400,7 +437,16 @@ function windowRange(anchor, days, offset = 0){
   return [dayStart - (days - 1 + offset) * DAY,
           offset ? dayStart - (offset - 1) * DAY : Infinity];
 }
-const scopeRange = () => windowRange(LAST_TS, scopeDef().days, scopeDef().offset);
+function scopeRange(){
+  const d = scopeDef();
+  if (!d.custom) return windowRange(LAST_TS, d.days, d.offset);
+  if (!customFrom || !customTo) return null;
+  // The picker names whole days and the second one is inclusive, so the range
+  // ends at the midnight after it.
+  return [DAYSEC(customFrom), DAYSEC(customTo) + DAY];
+}
+const customDays = () => (!customFrom || !customTo) ? 1
+  : Math.max(1, Math.round((DAYSEC(customTo) - DAYSEC(customFrom)) / DAY) + 1);
 
 const SUMKEYS = Object.keys(DATA.players[0]?.sum || {});
 
@@ -1253,27 +1299,68 @@ function renderScopeBar(){
   // window is on, or the reader takes "Today" to apply to the pictures as well.
   const g = document.getElementById("galScope");
   g.textContent = scopeRange() == null ? ""
-    : `The charts below always cover the whole period — ${scopeDef().label.toLowerCase()} `
-      + "applies to the character search and its boards, not to the rendered images.";
+    : "The charts below always cover the whole period — "
+      + (scopeDef().custom ? "the dates you picked apply"
+                           : `${scopeDef().label.toLowerCase()} applies`)
+      + " to the character search and its boards, not to the rendered images.";
   scopeBar.innerHTML = SCOPES.map(sc =>
     `<button type="button" data-scope="${sc.id}"${sc.id === scope ? ' class="on"' : ""}
      >${sc.label}</button>`).join("");
+  // The picker only exists while its own scope is on, and it opens on the whole
+  // period so the first thing it shows is what the reader was already looking at.
+  const box = document.getElementById("dateRange");
+  box.classList.toggle("hidden", !scopeDef().custom);
+  if (scopeDef().custom){
+    const from = document.getElementById("dFrom"), to = document.getElementById("dTo");
+    if (!customFrom) customFrom = META.periodStart;
+    if (!customTo) customTo = META.periodEnd;
+    for (const [el, v] of [[from, customFrom], [to, customTo]]){
+      el.min = META.periodStart; el.max = META.periodEnd; el.value = v;
+    }
+  }
+
   scopeBar.querySelectorAll("button").forEach(b => b.onclick = () => {
     scope = b.dataset.scope;
-    applyScope();
-    renderScopeBar();
-    updateNote();
-    renderTicker();
-    if (view === "classes") renderClassBoards();
-    // Whoever is on screen is redrawn from the new window, or dropped if they
-    // did not play in it at all.
-    const shown = document.getElementById("card").dataset.player;
-    if (shown){
-      const p = P.find(x => x.name === shown);
-      if (p) show(p); else clearPlayer();
-    }
+    refreshScope();
   });
 }
+
+// Everything that reads the window, redrawn in one place: the switch and the two
+// date fields both land here.
+function refreshScope(){
+  applyScope();
+  renderScopeBar();
+  updateNote();
+  renderTicker();
+  if (view === "classes") renderClassBoards();
+  // Whoever is on screen is redrawn from the new window, or dropped if they did
+  // not play in it at all.
+  const shown = document.getElementById("card").dataset.player;
+  if (shown){
+    const p = P.find(x => x.name === shown);
+    if (p) show(p); else clearPlayer();
+  }
+}
+
+/* The two date fields. Each keeps the other honest rather than letting a reader
+   build a range that runs backwards. */
+(() => {
+  const from = document.getElementById("dFrom"), to = document.getElementById("dTo");
+  from.onchange = () => {
+    customFrom = from.value || META.periodStart;
+    if (customTo && customFrom > customTo) customTo = customFrom;
+    refreshScope();
+  };
+  to.onchange = () => {
+    customTo = to.value || META.periodEnd;
+    if (customFrom && customTo < customFrom) customFrom = customTo;
+    refreshScope();
+  };
+  document.getElementById("dReset").onclick = () => {
+    customFrom = META.periodStart; customTo = META.periodEnd;
+    refreshScope();
+  };
+})();
 
 document.getElementById("home").onclick = () => {
   if (document.getElementById("card").classList.contains("hidden"))

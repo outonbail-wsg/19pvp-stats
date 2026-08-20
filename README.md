@@ -236,7 +236,8 @@ over today, the last seven days and the whole period. Clicking it opens the
 character it names. Built from the same windowed records as everything else, so
 nothing is pre-computed for the strip alone.
 
-**Time windows.** The page reads *All time*, *Last 7 days* or *Yesterday*, rebuilt
+**Time windows.** The page reads *All time*, *Last 7 days*, *Yesterday* or a range
+picked by hand, rebuilt
 in the browser from the match log that already ships in the payload rather than
 from a second and third set of pre-aggregated totals. The window anchors on the
 newest match that passes the lobby filter, not the newest in the file — contested
@@ -247,6 +248,12 @@ bracket. Power rating, head-to-head and
 team-mate records have no windowed form (they need every match in order, or the
 other side of each match) and say so instead of showing an all-time figure under a
 seven-day heading. The match threshold drops with the window: 10, 5, 3.
+
+A picked range interpolates its threshold between those anchors rather than
+looking one up — three matches over a single day, the full bar over the whole
+period — so picking every date by hand gives the same pool *All time* does. The
+charts do not follow any of this: they are rendered once per build over the whole
+period, and the gallery says so whenever a window is on.
 
 **Linkable characters.** A character view has its own address, `…/#/c/Name`, so a
 player can bookmark their page or post it. Close it with the button on the card or
