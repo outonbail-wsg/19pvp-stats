@@ -38,7 +38,7 @@ def parse_args(argv=None):
     p.add_argument("--skip-charts", action="store_true",
                    help="do not re-render the PNGs, just reuse them")
     p.add_argument("--tz", default="UTC")
-    p.add_argument("--min-games", type=int, default=20)
+    p.add_argument("--min-games", type=int, default=10)
     p.add_argument("--analytics", default=os.environ.get("GOATCOUNTER_URL", ""),
                    help="GoatCounter endpoint, e.g. https://NAME.goatcounter.com/count; "
                         "taken from GOATCOUNTER_URL when not given. Empty means no script at all.")

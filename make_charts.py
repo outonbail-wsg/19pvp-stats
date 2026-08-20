@@ -50,7 +50,7 @@ def parse_args(argv=None):
     p.add_argument("--outdir", type=Path, default=ROOT / "output")
     p.add_argument("--tz", default="UTC",
                    help="time zone for day/hour axes (default UTC)")
-    p.add_argument("--min-games", type=int, default=20,
+    p.add_argument("--min-games", type=int, default=10,
                    help="minimum matches for average-based leaderboards")
     p.add_argument("--only", nargs="*", default=None,
                    help="only charts whose file name starts with one of these prefixes")

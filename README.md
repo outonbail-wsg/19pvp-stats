@@ -18,7 +18,7 @@ Options:
 ```bash
 python make_charts.py --only 12 15 19      # render selected charts by prefix
 python make_charts.py --tz Europe/Berlin   # day/hour axes in a local zone
-python make_charts.py --min-games 30       # stricter threshold for rate/win-rate boards
+python make_charts.py --min-games 20       # stricter threshold for rate/win-rate boards
 python make_charts.py --csv path/to.csv --outdir path/to/out
 ```
 
@@ -208,6 +208,14 @@ self-refreshing, set a repository variable `LEADERBOARD_CSV_URL` to the raw expo
 endpoint; without it the workflow just rebuilds from the CSV in `Data/`.
 
 To publish: push to a public repo, then Settings → Pages → Source: *GitHub Actions*.
+
+**Ranking pool.** Rate and win-rate boards need `--min-games` matches (default 10),
+because a rate over three rounds swings too far to place. On the charts that
+threshold is a hard filter. On a character's own page it is not: someone below it
+is added to the pool and does get a placing — seeing where you stand is the point
+of the page — but the card says plainly that the ranking is provisional and why.
+The pool is the same one the charts use, so a card and a chart can never name a
+different leader.
 
 **Linkable characters.** A character view has its own address, `…/#/c/Name`, so a
 player can bookmark their page or post it. A link that points at someone with no
