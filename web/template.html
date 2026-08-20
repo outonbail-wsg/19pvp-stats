@@ -36,6 +36,14 @@
 
   /* ---- player card ---- */
   .who{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:2px}
+  .units{display:flex;gap:6px;margin:0 0 12px}
+  .units button{border:1px solid var(--grid);background:var(--surface);color:var(--ink2);
+                border-radius:999px;padding:4px 11px;font-size:12.5px;
+                font-family:inherit;cursor:pointer}
+  .units button.on{border-color:var(--accent);color:var(--accent);
+                   background:var(--accent-soft)}
+  h1 #home{all:unset;cursor:pointer;display:inline-block}
+  h1 #home:hover{color:var(--accent)}
   .closecard{margin-left:auto;border:1px solid var(--grid);background:var(--surface);
              color:var(--ink2);border-radius:999px;padding:5px 13px;font-size:12.5px;
              font-family:inherit;cursor:pointer;align-self:center}
@@ -130,7 +138,7 @@
 <body>
 <div class="wrap">
 
-  <h1>Warsong Gulch stats</h1>
+  <h1><button type="button" id="home">Warsong Gulch stats</button></h1>
   <p class="sub" id="period"></p>
 
   <div class="card">
@@ -140,6 +148,7 @@
       <button id="go">Show stats</button>
     </div>
     <div class="hits" id="hits"></div>
+    <div class="units" id="scopeBar" style="margin:14px 0 0"></div>
     <label class="switch">
       <input type="checkbox" id="allLobbies">
       <span>Include lobbies the bots filled</span>
@@ -151,6 +160,7 @@
 
   <h2>Server report</h2>
   <p class="sub">Every chart from the full analysis, regenerated with the data above.</p>
+  <p class="muted" id="galScope" style="margin:-8px 0 16px"></p>
   <nav class="galnav" id="galnav"></nav>
   <div class="gal" id="gal"></div>
 
@@ -172,8 +182,16 @@ let allLobbies = false;
 let P = [], QUAL = [], CHARTS = [], GROUPS = [];
 function applyScope(){
   const contested = HAS_CONTESTED && !allLobbies;
-  P = contested ? DATA.playersContested : DATA.players;
-  QUAL = P.filter(p => p.games >= META.minGames);
+  const base = contested ? DATA.playersContested : DATA.players;
+  LAST_TS = lastTs(contested);
+  const cut = scopeCut();
+  if (cut == null) P = base;
+  else P = base.map(p => {
+    const rows = (DATA.log[p.id] || DATA.log[String(p.id)] || [])
+      .filter(r => r[LF.at] >= cut && (!contested || r[LF.contested]));
+    return rows.length ? scopedRecord(p, rows) : null;
+  }).filter(Boolean).sort((a, b) => b.games - a.games);
+  QUAL = P.filter(p => p.games >= scopeMin());
   CHARTS = contested && DATA.chartsContested.length
          ? DATA.chartsContested : DATA.charts;
   GROUPS = (contested && DATA.chartsContested.length
@@ -228,6 +246,24 @@ const rankText = r => r ? `#${r.rank} of ${r.of}${r.provisional ? " · provision
 const MIN_CLASS_POOL = 8;
 const classPool = c => QUAL.filter(p => p.class === c);
 
+/* ---------- time scopes ----------
+   The whole match log is already in the payload, so a "today" or "last 7 days"
+   view is a re-aggregation of rows the page holds rather than a second and
+   third set of pre-computed totals. Elo, rivals and team mates cannot be
+   rebuilt this way - they need the opposing side of every match - so a scoped
+   view drops those panels instead of showing an all-time number under a
+   short-window heading. */
+const SCOPES = [
+  {id: "all",   label: "All time",    days: null},
+  {id: "week",  label: "Last 7 days", days: 7,  min: 5},
+  {id: "today", label: "Today",       days: 1,  min: 3},
+];
+let scope = "all";
+const scopeDef = () => SCOPES.find(x => x.id === scope) || SCOPES[0];
+// A short window cannot clear the full match threshold, so it carries a lower
+// one. Ranking three days of play against a 10-match bar would empty the pool.
+const scopeMin = () => scopeDef().min ?? META.minGames;
+
 /* ---------- game log ---------- */
 const LF = {};
 DATA.logFields.forEach((f, i) => LF[f] = i);
@@ -235,6 +271,75 @@ function logOf(p){
   const rows = DATA.log[p.id] || DATA.log[String(p.id)] || [];
   return (HAS_CONTESTED && !allLobbies) ? rows.filter(r => r[LF.contested]) : rows;
 }
+// Windows are anchored on the newest match in the data, not on the reader's
+// clock: a build from this morning would otherwise show an empty "today" all
+// evening. The note under the switch states the dates it actually covers.
+const DAY = 86400;
+// The anchor has to follow the lobby filter, not the raw data: contested play
+// can end a day earlier than bot-filled play, and anchoring on the latter gives
+// a "Today" with nothing in it.
+let LAST_TS = 0;
+function lastTs(contested){
+  let mx = 0;
+  for (const rows of Object.values(DATA.log))
+    for (let i = rows.length - 1; i >= 0; i--)
+      if (!contested || rows[i][LF.contested]){
+        if (rows[i][LF.at] > mx) mx = rows[i][LF.at];
+        break;
+      }
+  return mx;
+}
+function scopeCut(){
+  const d = scopeDef().days;
+  if (d == null || !LAST_TS) return null;
+  const dayStart = Math.floor(LAST_TS / DAY) * DAY;   // UTC midnight of that day
+  return dayStart - (d - 1) * DAY;
+}
+
+const SUMKEYS = Object.keys(DATA.players[0]?.sum || {});
+
+/* Rebuild one character's record from the rows inside the window. Same shape as
+   the pre-computed record, with the fields that need cross-match context left
+   null so the card can hide those panels rather than mislabel them. */
+function scopedRecord(p, rows){
+  const sum = {}, best = {}, days = new Set();
+  let wins = 0, decided = 0, secs = 0, deserts = 0;
+  let run = 0, bestWin = 0, bestLoss = 0;
+  for (const k of SUMKEYS){ sum[k] = 0; best[k] = 0; }
+  for (const r of rows){
+    secs += r[LF.seconds];
+    days.add(Math.floor(r[LF.at] / DAY));
+    if (r[LF.deserted]) deserts++;
+    const res = r[LF.win];
+    if (res !== 0){
+      decided++;
+      if (res === 1){ wins++; run = run > 0 ? run + 1 : 1; bestWin = Math.max(bestWin, run); }
+      else { run = run < 0 ? run - 1 : -1; bestLoss = Math.max(bestLoss, -run); }
+    }
+    for (const k of SUMKEYS){
+      const v = r[LF[k]] || 0;
+      sum[k] += v;
+      if (v > best[k]) best[k] = v;
+    }
+  }
+  const minutes = secs / 60, pm = {};
+  for (const k of SUMKEYS) pm[k] = minutes ? sum[k] / minutes : null;
+  return {
+    ...p, games: rows.length, decided, wins, minutes,
+    winrate: decided ? wins / decided : null,
+    days: days.size, sum, pm, best,
+    kd: sum.deaths ? sum.killingBlows / sum.deaths : null,
+    takenPerDeath: sum.deaths ? sum.damageTaken / sum.deaths : null,
+    capRate: sum.attemptsOnFlag ? sum.flagCaptures / sum.attemptsOnFlag : null,
+    desertRate: rows.length ? deserts / rows.length : null,
+    firstSeen: dateOf(rows[0][LF.at]), lastSeen: dateOf(rows[rows.length - 1][LF.at]),
+    streak: run, bestWin, bestLoss,
+    objDamage: sum.damageDone ? sum.damageOnEFC / sum.damageDone : null,
+    objHealing: sum.healingDone ? sum.healsOnFC / sum.healingDone : null,
+    elo: null, rivals: [], allies: [], scoped: true,
+  };
+}
+
 const dateOf = sec => new Date(sec * 1000)
   .toLocaleDateString("en-GB", {day:"2-digit", month:"short"});
 
@@ -247,7 +352,9 @@ function updateNote(){
     : `All lobbies, including those the bots filled.`;
   document.getElementById("searchNote").textContent =
     `${scope} ${P.length} characters in view; averages and ranks use the `
-    + `${QUAL.length} with at least ${META.minGames} matches.`;
+    + `${QUAL.length} with at least ${scopeMin()} matches.`
+    + (scopeCut() == null ? ""
+       : ` ${scopeDef().label}: ${dateOf(scopeCut())} – ${dateOf(LAST_TS)}.`);
 }
 
 function matches(term){
@@ -276,9 +383,24 @@ document.getElementById("go").onclick = () => { const l = matches(q.value);
   if (l.length){ q.value = l[0].name; hits.innerHTML = ""; show(l[0]); } };
 
 /* ---------- the player card ---------- */
+/* Rates can be read three ways. Per hour is per minute times sixty, so it ranks
+   identically; per game is a different quantity and a different order, because
+   someone who plays short rounds looks better by the minute than by the game. */
+const UNITS = [["pm", "per minute", 1], ["ph", "per hour", 60], ["pg", "per game", null]];
+let unit = "pm";
+const unitFactor = () => (UNITS.find(u => u[0] === unit) || UNITS[0])[2];
+const rateOf = (x, k) => {
+  const f = unitFactor();
+  if (f == null) return x.games ? (x.sum[k] ?? null) / x.games : null;
+  const v = x.pm[k];
+  return v == null ? null : v * f;
+};
+
 const RANKED = ["damageDone","healingDone","damageOnEFC","healsOnFC",
-                "flagReturns","flagCaptures","killingBlows","absorbsDone",
-                "successfulInterrupts"];
+                "flagReturns","flagCaptures","flagCarryTime","attemptsOnFlag",
+                "killingBlows","honorableKills","deaths","damageTaken","absorbsDone",
+                "successfulInterrupts","fakeCastInterrupts","hardCCDuration",
+                "softCCDuration","dispelsOffensive","dispelsDefensive"];
 
 /* Profile shape. Short labels: eight full stat names will not fit around a
    radar, so the key underneath spells them out. */
@@ -329,13 +451,14 @@ function radarSVG(dims, color, size){
 function show(p){
   const el = document.getElementById("card");
   const col = readable(classColor(p.class));
-  const wrRank = rankOf(p, x => x.winrate, QUAL.filter(x => x.decided >= META.minGames));
+  const wrRank = rankOf(p, x => x.winrate, QUAL.filter(x => x.decided >= scopeMin()));
 
   const eloRank = rankOf(p, x => x.elo, QUAL);
   const tiles = [
     [p.games, "matches played", `${p.days} day${p.days===1?"":"s"} active`],
     [pct(p.winrate), "win rate", rankText(wrRank)],
-    [p.elo != null ? Math.round(p.elo) : "–", "power rating", rankText(eloRank)],
+    [p.elo != null ? Math.round(p.elo) : "–", "power rating",
+     p.scoped ? "all-time only" : rankText(eloRank)],
     [fmt(p.sum.flagCaptures), "flag captures",
      p.capRate != null ? pct(p.capRate) + " of pickups" : ""],
     [fmt(p.sum.flagReturns), "flag returns", ""],
@@ -363,9 +486,9 @@ function show(p){
   const pool = classPool(p.class);
   const useClass = pool.length >= MIN_CLASS_POOL;
   const rows = RANKED.map(k => {
-    const r = rankOf(p, x => x.pm[k], QUAL);
-    const rc = useClass ? rankOf(p, x => x.pm[k], pool) : null;
-    return {k, v: p.pm[k], r, rc};
+    const r = rankOf(p, x => rateOf(x, k), QUAL);
+    const rc = useClass ? rankOf(p, x => rateOf(x, k), pool) : null;
+    return {k, v: rateOf(p, k), r, rc};
   }).filter(r => r.v != null).sort((a, b) => (b.r?.pctile || 0) - (a.r?.pctile || 0));
 
   const bests = Object.entries(p.best).filter(([,v]) => v);
@@ -386,11 +509,11 @@ function show(p){
           <div class="k">${k}</div><div class="s">${s}</div></div>`).join("")}
       </div>
       ${provisional ? `<p class="caveat"><b>Provisional ranking.</b> Placings on
-        this page compare characters with ${META.minGames}+ matches. ${p.name} has
+        this page compare characters with ${scopeMin()}+ matches. ${p.name} has
         ${plural(p.games, "match", "matches")} and is placed into that pool anyway,
         so the ranks below are shown but not settled: over so few matches a couple
         of good or bad rounds move a rate a long way, and a high placing here rests
-        on a small sample. It firms up at ${META.minGames} matches.</p>` : ""}
+        on a small sample. It firms up at ${scopeMin()} matches.</p>` : ""}
       <h2 style="font-size:15px;margin:22px 0 0">Form — last ${recent.length} matches</h2>
       <div class="form">${formHTML}</div>
       <div class="streak">${streakTxt} · best run ${plural(p.bestWin||0, "win", "wins")},
@@ -401,7 +524,7 @@ function show(p){
       <div class="card">
         <h2 style="margin-top:0">Profile</h2>
         <p class="muted" style="margin-top:-6px">Each axis is this character's
-          percentile among the ${QUAL.length} with ${META.minGames}+ matches${
+          percentile among the ${QUAL.length} with ${scopeMin()}+ matches${
           provisional ? `, plus ${p.name}` : ""} — the outer ring is the highest
           value in the pool. Read each spoke on its own.</p>
         ${radarSVG(profile, col, 300)}
@@ -410,16 +533,22 @@ function show(p){
       </div>
 
       <div class="card">
-        <h2 style="margin-top:0">Per minute, against the field</h2>
+        <h2 style="margin-top:0">Rates, against the field</h2>
         <p class="muted" style="margin-top:-6px">Bar shows the percentile among the
-          ${QUAL.length} characters with ${META.minGames}+ matches${
-          provisional ? `, plus ${p.name}` : ""}.</p>
-        <table><thead><tr><th>Statistic</th><th class="n">per min</th>
+          ${QUAL.length} characters with ${scopeMin()}+ matches${
+          provisional ? `, plus ${p.name}` : ""}. Per game reorders the board:
+          short rounds flatter a per-minute rate.</p>
+        <div class="units">${UNITS.map(([u, lab]) =>
+          `<button type="button" data-unit="${u}"${u === unit ? ' class="on"' : ""}
+           >${lab}</button>`).join("")}</div>
+        <table><thead><tr><th>Statistic</th>
+          <th class="n">${(UNITS.find(u => u[0] === unit) || UNITS[0])[1]}</th>
           <th class="barcell">percentile</th><th class="n">rank</th>
           ${useClass ? `<th class="n">vs ${p.class}s</th>` : ""}</tr></thead><tbody>
         ${rows.map(r => `<tr>
           <td>${LBL[r.k] || r.k}</td>
-          <td class="n">${r.v >= 100 ? fmt(r.v) : r.v.toFixed(2)}</td>
+          <td class="n">${SEC.has(r.k) ? dur(r.v)
+                          : r.v >= 100 ? fmt(r.v) : r.v.toFixed(2)}</td>
           <td class="barcell"><div class="bar"><span style="width:${
               ((r.r?.pctile||0)*100).toFixed(0)}%;background:${col}"></span></div></td>
           <td class="n">${r.r ? "#"+r.r.rank : "–"}</td>
@@ -427,7 +556,7 @@ function show(p){
         </tr>`).join("")}
         </tbody></table>
         ${useClass ? "" : `<p class="muted">Too few ${p.class || "same-class"}
-          characters with ${META.minGames}+ matches for a class ranking.</p>`}
+          characters with ${scopeMin()}+ matches for a class ranking.</p>`}
       </div>
 
     </div>
@@ -446,12 +575,15 @@ function show(p){
         <h2 style="margin-top:0">Contested vs thin lobbies</h2>
         <p class="muted" style="margin-top:-6px">Contested = both teams fielded
           ${META.contestedPerTeam}+ real players; thin = ${META.thinPerTeam} or fewer.</p>
-        <table><tbody>
+        ${p.scoped ? `<p class="muted">This compares the two kinds of lobby across
+          the whole period, so it does not narrow to ${scopeDef().label.toLowerCase()}.
+          Switch back to all time to see it.</p>`
+        : `<table><tbody>
           <tr><td>Contested lobbies</td><td class="n">${pct(p.contestedWr)}</td>
               <td class="n muted">${p.contestedN} matches</td></tr>
           <tr><td>Thin lobbies</td><td class="n">${pct(p.thinWr)}</td>
               <td class="n muted">${p.thinN} matches</td></tr>
-        </tbody></table>
+        </tbody></table>`}
 
         <h2>Other rates</h2>
         <table><tbody>
@@ -475,7 +607,7 @@ function show(p){
           ${p.rivals.map(([n,wn,ls]) => `<tr><td>${n}</td>
             <td class="n">${wn}–${ls}</td>
             <td class="n">${pct(wn/(wn+ls))}</td></tr>`).join("")}
-          </tbody></table>` : `<p class="muted">Nobody met often enough yet.</p>`}
+          </tbody></table>` : `<p class="muted">${p.scoped ? "Head-to-head records are only kept for the whole period." : "Nobody met often enough yet."}</p>`}
       </div>
 
       <div class="card">
@@ -487,7 +619,7 @@ function show(p){
           ${p.allies.map(([n,wn,ls]) => `<tr><td>${n}</td>
             <td class="n">${wn}–${ls}</td>
             <td class="n">${pct(wn/(wn+ls))}</td></tr>`).join("")}
-          </tbody></table>` : `<p class="muted">No regular team mates yet.</p>`}
+          </tbody></table>` : `<p class="muted">${p.scoped ? "Team-mate records are only kept for the whole period." : "No regular team mates yet."}</p>`}
       </div>
     </div>
 
@@ -501,6 +633,10 @@ function show(p){
   el.dataset.player = p.name;
   el.classList.remove("hidden");
   el.querySelector("#closeCard").onclick = clearPlayer;
+  el.querySelectorAll(".units button").forEach(b => b.onclick = () => {
+    unit = b.dataset.unit;
+    show(p);                       // same character, rates read the other way
+  });
   el.scrollIntoView({behavior:"smooth", block:"start"});
 }
 
@@ -672,6 +808,40 @@ document.addEventListener("touchend", e => {
 
 document.getElementById("period").textContent =
   `${META.matches} matches · ${META.characters} characters · ${META.periodLabel}`;
+// The site name is the way home: press it and the report is back, no character.
+/* ---------- the time-window switch ---------- */
+const scopeBar = document.getElementById("scopeBar");
+function renderScopeBar(){
+  // The charts are rendered once per build over the whole period. Say so when a
+  // window is on, or the reader takes "Today" to apply to the pictures as well.
+  const g = document.getElementById("galScope");
+  g.textContent = scopeCut() == null ? ""
+    : `The charts below always cover the whole period — ${scopeDef().label.toLowerCase()} `
+      + "applies to the character search and its boards, not to the rendered images.";
+  scopeBar.innerHTML = SCOPES.map(sc =>
+    `<button type="button" data-scope="${sc.id}"${sc.id === scope ? ' class="on"' : ""}
+     >${sc.label}</button>`).join("");
+  scopeBar.querySelectorAll("button").forEach(b => b.onclick = () => {
+    scope = b.dataset.scope;
+    applyScope();
+    renderScopeBar();
+    updateNote();
+    // Whoever is on screen is redrawn from the new window, or dropped if they
+    // did not play in it at all.
+    const shown = document.getElementById("card").dataset.player;
+    if (shown){
+      const p = P.find(x => x.name === shown);
+      if (p) show(p); else clearPlayer();
+    }
+  });
+}
+
+document.getElementById("home").onclick = () => {
+  if (document.getElementById("card").classList.contains("hidden"))
+    document.querySelector("h1").scrollIntoView({behavior: "smooth", block: "start"});
+  else clearPlayer();
+};
+
 /* ---------- the lobby switch ---------- */
 const box = document.getElementById("allLobbies");
 if (!HAS_CONTESTED) box.closest(".switch").style.display = "none";
@@ -745,6 +915,7 @@ function route(){
 window.addEventListener("hashchange", route);
 
 applyScope();
+renderScopeBar();
 updateNote();
 renderGallery();
 route();

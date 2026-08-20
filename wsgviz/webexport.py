@@ -19,11 +19,6 @@ from .context import Ctx
 # One match of one character, as a fixed array of integers. Field names travel
 # once in `logFields` instead of on every one of the 7,000+ entries - that is
 # what keeps the complete history under 150 KB gzipped.
-LOG_FIELDS = ["at", "win", "ownCaps", "oppCaps", "seconds", "damageDone",
-              "healingDone", "damageOnEFC", "healsOnFC", "flagCaptures",
-              "flagReturns", "flagCarryTime", "killingBlows", "deaths",
-              "honorableKills", "deserted", "contested"]
-
 # Per-character totals worth shipping. Keys stay as the raw column names so the
 # page can look up a label from STAT_LABELS without a second mapping.
 SUM_STATS = [
@@ -33,14 +28,17 @@ SUM_STATS = [
     "successfulInterrupts", "fakeCastInterrupts", "dispelsOffensive",
     "dispelsDefensive", "hardCCDuration", "softCCDuration", "bonusHonor",
 ]
-# Rates the card ranks a character on. flagCarryTime is a duration, so its
-# per-minute value is a share of time rather than a rate - the page uses it only
-# for the profile shape, not in the per-minute table.
-RATE_STATS = [
-    "damageDone", "healingDone", "damageOnEFC", "healsOnFC", "flagReturns",
-    "flagCaptures", "killingBlows", "absorbsDone", "successfulInterrupts",
-    "flagCarryTime",
-]
+# Every summed stat also ships as a per-minute rate. Keeping the two lists in
+# step matters: the card filters out a row whose rate is missing, so a narrower
+# list here silently drops statistics from the table instead of failing.
+RATE_STATS = SUM_STATS
+
+# The match log carries every summed statistic, not a chosen few, because the
+# page rebuilds "today" and "last 7 days" from it rather than shipping a second
+# and third set of pre-aggregated totals. A statistic missing here would simply
+# have no scoped view.
+LOG_META = ["at", "win", "ownCaps", "oppCaps", "seconds", "deserted", "contested"]
+LOG_FIELDS = LOG_META + SUM_STATS
 # Single-match personal bests.
 BEST_STATS = [
     "damageDone", "healingDone", "damageOnEFC", "healsOnFC", "killingBlows",
