@@ -29,6 +29,10 @@ TIMER_SLACK = 30
 # A WSG team holds 10 slots. A match counts as contested when both sides fielded
 # at least this many distinct real players - bots fill whatever is left, and they
 # are absent from the export. Defined once so every chart uses the same cut.
+# A conversion rate needs a floor of attempts, or one lucky grab sits at 100 %
+# above everyone who ever carried the flag properly.
+MIN_PICKUPS = 25
+
 CONTESTED_PER_TEAM = 8
 THIN_PER_TEAM = 5
 

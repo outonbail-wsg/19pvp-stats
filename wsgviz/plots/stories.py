@@ -14,7 +14,7 @@ import pandas as pd
 
 from .. import theme as T
 from ..context import Ctx
-from ..data import CONTESTED_PER_TEAM, THIN_PER_TEAM, fmt_duration
+from ..data import CONTESTED_PER_TEAM, MIN_PICKUPS, THIN_PER_TEAM, fmt_duration
 from . import helpers as H
 
 MIN_IN_EACH = 8          # matches a character needs in both contexts
@@ -163,10 +163,11 @@ def rivalries(ctx: Ctx):
                 wr[i, j] = wins / size
                 txt[i, j] = f"{int(wins)}–{int(size - wins)}"
 
-    # Longest streaks over every character with enough matches.
+    # Longest streaks over every character with enough matches - the same bar the
+    # rest of the deck uses, rather than one this chart set for itself.
     streaks = []
     for guid, g in dec.groupby("playerGuid"):
-        if len(g) < 20:
+        if len(g) < ctx.min_games:
             continue
         cur = mx = curl = mxl = 0
         for v in g["win"].to_numpy():
@@ -184,7 +185,7 @@ def rivalries(ctx: Ctx):
         "A cell reads as the row player's wins–losses against the column player when "
         "they were on opposite teams; blue means the row player is ahead, red behind, "
         "blank fewer than 8 meetings. These are team results, not duels. Streaks cover "
-        "every character with 20+ decided matches."))
+        f"every character with {ctx.min_games}+ decided matches."))
 
     ax = fig.add_axes([0.10, bottom + 0.03, 0.44, top - bottom - 0.06])
     norm = mcolors.TwoSlopeNorm(vmin=0.15, vcenter=0.5, vmax=0.85)
@@ -233,7 +234,7 @@ def rivalries(ctx: Ctx):
 def flag_efficiency(ctx: Ctx):
     """Conversion rate on the flag, and how much output goes to the objective."""
     tot = ctx.totals
-    q = tot[tot["attemptsOnFlag_sum"] >= 25].copy()
+    q = tot[tot["attemptsOnFlag_sum"] >= MIN_PICKUPS].copy()
     q["cap_rate"] = q["flagCaptures_sum"] / q["attemptsOnFlag_sum"]
     q["hold"] = q["flagCarryTime_sum"] / q["attemptsOnFlag_sum"]
 
@@ -249,7 +250,8 @@ def flag_efficiency(ctx: Ctx):
         "How often a flag pickup becomes a capture, and how much of a character's "
         "output goes to the flag carriers")
     bottom = T.footnote(fig, ctx.source_note(
-        f"Left: characters with 25+ pickups ({len(q)}); dot size scales with pickups. "
+        f"Left: characters with {MIN_PICKUPS}+ pickups ({len(q)}); dot size scales with "
+        "pickups. "
         f"Across everyone {overall_cap*100:.0f} % of pickups become a capture and "
         f"{overall_dmg*100:.0f} % of damage lands on the enemy carrier (grey line). "
         f"Right-hand boards need {ctx.min_games}+ matches."))

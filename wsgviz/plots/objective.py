@@ -12,15 +12,11 @@ import matplotlib.pyplot as plt
 
 from .. import theme as T
 from ..context import Ctx
-from ..data import STATS_BY_COLUMN, fmt_duration
+from ..data import MIN_PICKUPS, STATS_BY_COLUMN, fmt_duration
 from . import helpers as H
 from . import icons
 
 TOP_N = 8
-
-# Conversion is a ratio, so it needs a floor: one lucky grab would otherwise
-# sit at 100 % above everyone who ever carried the flag properly.
-MIN_PICKUPS = 25
 
 
 def _board(ctx: Ctx, stats, title, subtitle, note, *, fmt_total=T.compact,

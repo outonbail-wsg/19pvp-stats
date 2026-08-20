@@ -36,6 +36,10 @@
 
   /* ---- player card ---- */
   .who{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:2px}
+  .closecard{margin-left:auto;border:1px solid var(--grid);background:var(--surface);
+             color:var(--ink2);border-radius:999px;padding:5px 13px;font-size:12.5px;
+             font-family:inherit;cursor:pointer;align-self:center}
+  .closecard:hover{border-color:var(--accent);color:var(--accent)}
   .who .nm{font-size:27px;font-weight:600}
   .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));
          gap:14px;margin:18px 0 6px}
@@ -375,6 +379,7 @@ function show(p){
         <span class="muted">${p.class || "class unknown"}</span>
         <span class="scope">${(HAS_CONTESTED && !allLobbies)
           ? "contested lobbies" : "all lobbies"}</span>
+        <button class="closecard" id="closeCard" type="button">Close ✕</button>
       </div>
       <div class="tiles">
         ${tiles.map(([v,k,s]) => `<div class="tile"><div class="v">${v}</div>
@@ -495,7 +500,22 @@ function show(p){
   renderLog(log);
   el.dataset.player = p.name;
   el.classList.remove("hidden");
+  el.querySelector("#closeCard").onclick = clearPlayer;
   el.scrollIntoView({behavior:"smooth", block:"start"});
+}
+
+/* Back to the report without a character on screen. Clears the address too, so
+   a reload or a share does not drop the reader back onto someone's card. */
+function clearPlayer(){
+  const el = document.getElementById("card");
+  el.classList.add("hidden");
+  el.dataset.player = "";
+  q.value = "";
+  hits.innerHTML = "";
+  if (location.hash) history.pushState(null, "", location.pathname + location.search);
+  // Back to the search box, which is where the reader starts from.
+  document.querySelector("h1").scrollIntoView({behavior: "smooth", block: "start"});
+  q.focus();
 }
 
 /* ---------- game log table ---------- */
@@ -629,7 +649,11 @@ function closeLightbox(){
   document.body.style.overflow = "";
 }
 document.addEventListener("keydown", e => {
-  if (!lbEl || lbEl.style.display === "none") return;
+  if (!lbEl || lbEl.style.display === "none"){
+    if (e.key === "Escape" && !document.getElementById("card").classList.contains("hidden"))
+      clearPlayer();
+    return;
+  }
   if (e.key === "ArrowRight") stepLightbox(1);
   else if (e.key === "ArrowLeft") stepLightbox(-1);
   else if (e.key === "Escape") closeLightbox();

@@ -218,7 +218,8 @@ The pool is the same one the charts use, so a card and a chart can never name a
 different leader.
 
 **Linkable characters.** A character view has its own address, `…/#/c/Name`, so a
-player can bookmark their page or post it. A link that points at someone with no
+player can bookmark their page or post it. Close it with the button on the card or
+with Escape, which clears the address as well and returns to the report. A link that points at someone with no
 matches in the current slice flips the lobby switch rather than showing an empty
 card.
 

@@ -75,7 +75,7 @@ def contested_events(matches: pd.DataFrame) -> pd.Index:
                    & (matches["tracked_team1"] >= data.CONTESTED_PER_TEAM)].index
 
 
-def build(csv_path: Path, outdir: Path, tz: str = "UTC", min_games: int = 20,
+def build(csv_path: Path, outdir: Path, tz: str = "UTC", min_games: int = 10,
           lobby: str = "all") -> Ctx:
     """Build the shared context.
 
