@@ -296,6 +296,9 @@ function lastTs(contested){
       }
   return mx;
 }
+// A one-day window has one date, not the same one twice.
+const dateRange = (a, b) => dateOf(a) === dateOf(b)
+  ? dateOf(a) : `${dateOf(a)} – ${dateOf(b)}`;
 function scopeCut(){
   const d = scopeDef().days;
   if (d == null || !LAST_TS) return null;
@@ -347,8 +350,10 @@ function scopedRecord(p, rows){
   };
 }
 
+// UTC, like the windows are computed and like every chart footnote says. Reading
+// a UTC midnight in the browser's own zone put the wrong day on the label.
 const dateOf = sec => new Date(sec * 1000)
-  .toLocaleDateString("en-GB", {day:"2-digit", month:"short"});
+  .toLocaleDateString("en-GB", {day:"2-digit", month:"short", timeZone:"UTC"});
 
 /* ---------- search ---------- */
 const q = document.getElementById("q"), hits = document.getElementById("hits");
@@ -361,7 +366,7 @@ function updateNote(){
     `${scope} ${P.length} characters in view; averages and ranks use the `
     + `${QUAL.length} with at least ${scopeMin()} matches.`
     + (scopeCut() == null ? ""
-       : ` ${scopeDef().label}: ${dateOf(scopeCut())} – ${dateOf(LAST_TS)}.`);
+       : ` ${scopeDef().label}: ${dateRange(scopeCut(), LAST_TS)}.`);
 }
 
 function matches(term){
