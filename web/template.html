@@ -59,8 +59,14 @@
          border-radius:var(--radius);padding:12px 14px}
   .board h4{margin:0 0 8px;font-size:13.5px;font-weight:600;color:var(--ink)}
   .board ol{margin:0;padding:0;list-style:none;counter-reset:r}
-  .board li{display:flex;align-items:baseline;gap:8px;padding:3px 0;font-size:13px;
-            counter-increment:r}
+  .board li{position:relative;display:flex;align-items:baseline;gap:8px;
+            padding:4px 0 9px;font-size:13px;counter-increment:r}
+  /* The bar runs under the row, not behind it. Class-coloured text on a tint of
+     its own colour is the worst case for contrast, and behind-the-text fills put
+     four rows in five below 4.5:1. */
+  .board li .bar{position:absolute;left:0;right:0;bottom:2px;height:3px;
+                 border-radius:2px;background:var(--grid)}
+  .board li .bar i{display:block;height:100%;border-radius:2px}
   .board li::before{content:counter(r);color:var(--muted);font-size:11px;min-width:12px}
   .board li .nm{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .board li .v{margin-left:auto;color:var(--ink2);white-space:nowrap}
@@ -262,13 +268,20 @@ const classColor = c => DATA.classColors[c] || "#c9c8c2";
 
 /* Darken a class colour until it is readable as text on a light surface,
    the same rule the PNG charts use. */
+// Darkens a class colour until it clears 4.5:1 against the surface it is drawn
+// on. Measured against the actual card colour, not against white: the surface is
+// #fcfcfb, so a colour that just clears 4.5 on white lands under it here.
+const SURFACE_L = (() => {
+  const lin = c => { c /= 255; return c <= 0.04045 ? c/12.92 : ((c+0.055)/1.055)**2.4; };
+  return 0.2126*lin(0xfc) + 0.7152*lin(0xfc) + 0.0722*lin(0xfb);
+})();
 function readable(hex){
   const rgb = [1,3,5].map(i => parseInt(hex.slice(i,i+2),16)/255);
-  const lum = c => { const l = c<=0.04045 ? c/12.92 : ((c+0.055)/1.055)**2.4; return l; };
+  const lum = c => c<=0.04045 ? c/12.92 : ((c+0.055)/1.055)**2.4;
   const L = a => 0.2126*lum(a[0]) + 0.7152*lum(a[1]) + 0.0722*lum(a[2]);
-  for (let f=1; f>0.05; f-=0.04){
+  for (let f=1; f>0.05; f-=0.01){
     const c = rgb.map(v => v*f);
-    if ((1.05) / (L(c)+0.05) >= 4.5)
+    if ((SURFACE_L + 0.05) / (L(c) + 0.05) >= 4.5)
       return "#" + c.map(v => Math.round(v*255).toString(16).padStart(2,"0")).join("");
   }
   return "#0b0b0b";
@@ -1066,8 +1079,11 @@ function renderClassBoards(){
       .filter(([, v]) => v != null && v > 0)
       .sort((a, b) => b[1] - a[1]).slice(0, BOARD_TOP);
     if (!best.length) return "";
+    const max = best[0][1];
     return `<div class="board"><h4>${LBL[k] || k}</h4><ol>${best.map(([p, v]) =>
-      `<li><span class="nm" style="color:${readable(classColor(p.class))}">${p.name}</span>
+      `<li><span class="bar"><i style="width:${(v / max * 100).toFixed(1)}%;
+           background:${classColor(p.class)}"></i></span>
+       <span class="nm" style="color:${readable(classColor(p.class))}">${p.name}</span>
        <span class="v">${fmtFor(k)(v)}</span></li>`).join("")}</ol></div>`;
   }).join("");
 }
