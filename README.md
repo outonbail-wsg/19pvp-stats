@@ -236,11 +236,14 @@ over today, the last seven days and the whole period. Clicking it opens the
 character it names. Built from the same windowed records as everything else, so
 nothing is pre-computed for the strip alone.
 
-**Time windows.** The page reads *All time*, *Last 7 days* or *Today*, rebuilt in
-the browser from the match log that already ships in the payload rather than from
-a second and third set of pre-aggregated totals. The window anchors on the newest
-match that passes the lobby filter, not the newest in the file — contested play
-can stop a day before bot-filled play does. Power rating, head-to-head and
+**Time windows.** The page reads *All time*, *Last 7 days* or *Yesterday*, rebuilt
+in the browser from the match log that already ships in the payload rather than
+from a second and third set of pre-aggregated totals. The window anchors on the
+newest match that passes the lobby filter, not the newest in the file — contested
+play can stop a day before bot-filled play does. A single day is the last
+*complete* one: the export is taken part-way through a day, so the newest is
+always partial, and what it is missing is the evening — the busiest hours in the
+bracket. Power rating, head-to-head and
 team-mate records have no windowed form (they need every match in order, or the
 other side of each match) and say so instead of showing an all-time figure under a
 seven-day heading. The match threshold drops with the window: 10, 5, 3.

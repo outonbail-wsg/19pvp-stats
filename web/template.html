@@ -272,11 +272,12 @@ function applyScope(){
   const contested = HAS_CONTESTED && !allLobbies;
   const base = contested ? DATA.playersContested : DATA.players;
   LAST_TS = lastTs(contested);
-  const cut = scopeCut();
-  if (cut == null) P = base;
+  const range = scopeRange();
+  if (range == null) P = base;
   else P = base.map(p => {
     const rows = (DATA.log[p.id] || DATA.log[String(p.id)] || [])
-      .filter(r => r[LF.at] >= cut && (!contested || r[LF.contested]));
+      .filter(r => r[LF.at] >= range[0] && r[LF.at] < range[1]
+                && (!contested || r[LF.contested]));
     return rows.length ? scopedRecord(p, rows) : null;
   }).filter(Boolean).sort((a, b) => b.games - a.games);
   QUAL = P.filter(p => p.games >= scopeMin());
@@ -348,10 +349,14 @@ const classPool = c => QUAL.filter(p => p.class === c);
    rebuilt this way - they need the opposing side of every match - so a scoped
    view drops those panels instead of showing an all-time number under a
    short-window heading. */
+/* "offset" pushes a window back off the newest day. The export is taken part-way
+   through a day, so the newest one is always partial - and what it is missing is
+   the tail of the evening, which is when the bracket is busiest. A single day is
+   therefore read as the last complete one rather than as the stub of this one. */
 const SCOPES = [
-  {id: "all",   label: "All time",    days: null},
-  {id: "week",  label: "Last 7 days", days: 7,  min: 5},
-  {id: "today", label: "Today",       days: 1,  min: 3},
+  {id: "all",       label: "All time",    days: null},
+  {id: "week",      label: "Last 7 days", days: 7, min: 5},
+  {id: "yesterday", label: "Yesterday",   days: 1, min: 3, offset: 1},
 ];
 let scope = "all";
 const scopeDef = () => SCOPES.find(x => x.id === scope) || SCOPES[0];
@@ -387,12 +392,15 @@ function lastTs(contested){
 // A one-day window has one date, not the same one twice.
 const dateRange = (a, b) => dateOf(a) === dateOf(b)
   ? dateOf(a) : `${dateOf(a)} – ${dateOf(b)}`;
-function scopeCut(){
-  const d = scopeDef().days;
-  if (d == null || !LAST_TS) return null;
-  const dayStart = Math.floor(LAST_TS / DAY) * DAY;   // UTC midnight of that day
-  return dayStart - (d - 1) * DAY;
+// [from, to) in seconds. `to` is Infinity for a window that runs up to the newest
+// match, and a day boundary for one that stops short of the partial day.
+function windowRange(anchor, days, offset = 0){
+  if (days == null || !anchor) return null;
+  const dayStart = Math.floor(anchor / DAY) * DAY;    // UTC midnight of that day
+  return [dayStart - (days - 1 + offset) * DAY,
+          offset ? dayStart - (offset - 1) * DAY : Infinity];
 }
+const scopeRange = () => windowRange(LAST_TS, scopeDef().days, scopeDef().offset);
 
 const SUMKEYS = Object.keys(DATA.players[0]?.sum || {});
 
@@ -453,8 +461,15 @@ function updateNote(){
   document.getElementById("searchNote").textContent =
     `${scope} ${P.length} characters in view; averages and ranks use the `
     + `${QUAL.length} with at least ${scopeMin()} matches.`
-    + (scopeCut() == null ? ""
-       : ` ${scopeDef().label}: ${dateRange(scopeCut(), LAST_TS)}.`);
+    + (() => {
+      const r = scopeRange();
+      if (!r) return "";
+      const end = r[1] === Infinity ? LAST_TS : r[1] - 1;
+      return ` ${scopeDef().label}: ${dateRange(r[0], end)}.`
+        + (scopeDef().offset ? " The newest day is left out: the export is taken"
+                             + " part-way through it, so it is never a whole one."
+                             : "");
+    })();
 }
 
 function matches(term){
@@ -962,8 +977,10 @@ function setView(slug, {push = true} = {}){
 const TICK_STATS = ["flagCaptures", "flagReturns", "damageOnEFC", "healsOnFC",
   "successfulInterrupts", "hardCCDuration", "killingBlows", "damageDone",
   "healingDone", "flagCarryTime"];
-const TICK_WINDOWS = [["today", "today", 1], ["this week", "this week", 7],
-                      ["all time", "all time", null]];
+// label, days, offset. "Yesterday" rather than today for the same reason the
+// scope switch uses it: the newest day in the export is always a partial one.
+const TICK_WINDOWS = [["yesterday", 1, 1], ["this week", 7, 0],
+                      ["all time", null, 0]];
 // Chart labels are column headings - "Hard CC (duration)" - and read badly in
 // the middle of a sentence, so the strip has its own phrasing.
 const TICK_PHRASE = {
@@ -976,16 +993,16 @@ const TICK_PHRASE = {
 };
 const phrase = k => TICK_PHRASE[k] || (LBL[k] || k).toLowerCase();
 
-function recordsIn(days){
+function recordsIn(days, offset){
   const contested = HAS_CONTESTED && !allLobbies;
   const base = contested ? DATA.playersContested : DATA.players;
   if (days == null) return base;
-  const anchor = lastTs(contested);
-  if (!anchor) return [];
-  const cut = Math.floor(anchor / DAY) * DAY - (days - 1) * DAY;
+  const range = windowRange(lastTs(contested), days, offset);
+  if (!range) return [];
   return base.map(p => {
     const rows = (DATA.log[p.id] || DATA.log[String(p.id)] || [])
-      .filter(r => r[LF.at] >= cut && (!contested || r[LF.contested]));
+      .filter(r => r[LF.at] >= range[0] && r[LF.at] < range[1]
+                && (!contested || r[LF.contested]));
     return rows.length ? scopedRecord(p, rows) : null;
   }).filter(Boolean);
 }
@@ -993,8 +1010,8 @@ function recordsIn(days){
 function buildFacts(){
   const out = [];
   const val = (k, v) => SEC.has(k) ? dur(v) : fmt(v);
-  for (const [label, , days] of TICK_WINDOWS){
-    const recs = recordsIn(days);
+  for (const [label, days, offset] of TICK_WINDOWS){
+    const recs = recordsIn(days, offset);
     if (!recs.length) continue;
     for (const k of TICK_STATS){
       const best = recs.reduce((a, b) => (b.sum[k] || 0) > (a.sum[k] || 0) ? b : a);
@@ -1072,7 +1089,7 @@ function drawTick(){
   document.getElementById("tkCard").style.borderLeftColor = classColor(f.who.class);
   const badge = document.getElementById("tkBadge");
   badge.textContent = f.badge;
-  badge.className = "tk-badge" + (f.badge === "today" ? " now"
+  badge.className = "tk-badge" + (f.badge === "yesterday" ? " now"
                                 : f.badge === "record" ? " rec" : "");
   document.getElementById("tkLabel").textContent = f.label;
   const name = document.getElementById("tkName");
@@ -1235,7 +1252,7 @@ function renderScopeBar(){
   // The charts are rendered once per build over the whole period. Say so when a
   // window is on, or the reader takes "Today" to apply to the pictures as well.
   const g = document.getElementById("galScope");
-  g.textContent = scopeCut() == null ? ""
+  g.textContent = scopeRange() == null ? ""
     : `The charts below always cover the whole period — ${scopeDef().label.toLowerCase()} `
       + "applies to the character search and its boards, not to the rendered images.";
   scopeBar.innerHTML = SCOPES.map(sc =>
