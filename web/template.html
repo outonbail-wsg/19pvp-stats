@@ -78,8 +78,12 @@
                     border-radius:999px;padding:5px 12px;font-size:12.5px;
                     font-family:inherit;cursor:pointer}
   .classpick button.on{border-width:2px;padding:4px 11px;font-weight:600}
-  .boards{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px;
-          margin-top:18px}
+  .boards{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}
+  .bsec{margin-top:26px}
+  .bsec-head{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin:0 0 12px}
+  .bsec-head h3{margin:0;font-size:15px;font-weight:600;color:var(--ink)}
+  .bsec-head p{margin:0;font-size:12.5px;color:var(--ink2);flex:1;min-width:180px}
+  .bsec-head .units{margin:0}
   .board{background:var(--surface);border:1px solid var(--grid);
          border-radius:var(--radius);padding:12px 14px}
   .board h4{margin:0 0 8px;font-size:13.5px;font-weight:600;color:var(--ink)}
@@ -231,10 +235,9 @@
   <section class="page hidden" id="pgClasses">
     <div class="card">
       <div class="classpick" id="classPick"></div>
-      <div class="units" id="measureBar" style="margin:14px 0 0"></div>
-      <p class="muted" id="classNote" style="margin:10px 0 0"></p>
+      <p class="muted" id="classNote" style="margin:12px 0 0"></p>
     </div>
-    <div class="boards" id="classBoards"></div>
+    <div id="classBoards"></div>
   </section>
 
   <section class="page hidden" id="pgCharacters">
@@ -1150,20 +1153,11 @@ function renderClassPick(){
 
 function renderClassBoards(){
   renderClassPick();
-  document.getElementById("measureBar").innerHTML = MEASURES.map(([m, lab]) =>
-    `<button type="button" data-measure="${m}"${m === measure ? ' class="on"' : ""}
-     >${lab}</button>`).join("");
-  document.getElementById("measureBar").querySelectorAll("button").forEach(b =>
-    b.onclick = () => { measure = b.dataset.measure; renderClassBoards(); });
-
   const pool = boardPool();
+  const inView = (classFilter ? P.filter(p => p.class === classFilter) : P).length;
   document.getElementById("classNote").textContent =
-    `${pool.length} character${pool.length === 1 ? "" : "s"} in view`
-    + (classFilter ? ` playing ${classFilter}` : "")
-    + (measure === "sum" ? ", every character with a recorded match."
-       : `, needing ${scopeMin()}+ matches for a rate.`)
-    + " Games, wins and the two rates below them are counted per character rather "
-    + "than per minute or per game, so the measure above leaves them alone.";
+    `${inView} character${inView === 1 ? "" : "s"} in view`
+    + (classFilter ? ` playing ${classFilter}` : "") + ".";
 
   // A total is a count and prints as one; only the rate measures carry decimals.
   const fmtFor = k => v => SEC.has(k) ? dur(v)
@@ -1178,10 +1172,20 @@ function renderClassBoards(){
   // pool, not the pool the switch happens to be showing.
   const byClass = P.filter(p => !classFilter || p.class === classFilter);
 
-  el.innerHTML = BOARDS.map(b => {
+  const card = b => {
     const source = b.fixed ? byClass : pool;
     const value = b.fixed ? b.get : (p => boardValue(p, b.stat));
     const label = b.fixed ? b.label : (LBL[b.stat] || b.stat);
+    // The measure switch is at the top of the page and the boards run well past
+    // it. Without the measure on the card, 226 damage reads as a total and looks
+    // broken; a label that already brackets something absorbs it rather than
+    // growing a second bracket.
+    const measured = b.fixed ? label : (() => {
+      const unit = MEASURES.find(x => x[0] === measure)[1];
+      const m = label.match(/^(.*?)\s*\(([^)]*)\)\s*$/);
+      return `${m ? m[1] : label} <span class="sub">(${
+        m ? m[2] + ", " + unit : unit})</span>`;
+    })();
     const format = b.fixed ? b.fmt : fmtFor(b.stat);
     const best = source.filter(p => !b.ok || b.ok(p))
       .map(p => [p, value(p)])
@@ -1190,12 +1194,39 @@ function renderClassBoards(){
     if (!best.length) return "";
     const max = best[0][1];
     const sub = b.note ? ` <span class="sub">(${b.note()})</span>` : "";
-    return `<div class="board"><h4>${label}${sub}</h4><ol>${best.map(([p, v]) =>
+    return `<div class="board"><h4>${measured}${sub}</h4><ol>${best.map(([p, v]) =>
       `<li><span class="bar"><i style="width:${(v / max * 100).toFixed(1)}%;
            background:${classColor(p.class)}"></i></span>
        <span class="nm" style="color:${readable(classColor(p.class))}">${p.name}</span>
        <span class="v">${format(v)}</span></li>`).join("")}</ol></div>`;
-  }).join("");
+  };
+
+  // Two sections, because the measure switch does not apply to all of them. A
+  // win rate per minute is not a thing and neither is a game per game, and a
+  // page where four cards quietly ignore the control above them reads as broken.
+  const fixed = BOARDS.filter(b => b.fixed).map(card).join("");
+  const varied = BOARDS.filter(b => !b.fixed).map(card).join("");
+  el.innerHTML = `
+    <section class="bsec">
+      <div class="bsec-head"><h3>Record</h3>
+        <p>One form each — these are counted per character, so the measure below
+           does not apply to them.</p></div>
+      <div class="boards">${fixed}</div>
+    </section>
+    <section class="bsec">
+      <div class="bsec-head"><h3>Statistics</h3>
+        <p>${measure === "sum" ? "Totals cover every character in view."
+            : `Rates need ${scopeMin()}+ matches in this window.`}</p>
+        <div class="units" id="measureBar"></div></div>
+      <div class="boards">${varied}</div>
+    </section>`;
+
+  const bar = document.getElementById("measureBar");
+  bar.innerHTML = MEASURES.map(([m, lab]) =>
+    `<button type="button" data-measure="${m}"${m === measure ? ' class="on"' : ""}
+     >${lab}</button>`).join("");
+  bar.querySelectorAll("button").forEach(b =>
+    b.onclick = () => { measure = b.dataset.measure; renderClassBoards(); });
 }
 
 /* ---------- the time-window switch ---------- */
