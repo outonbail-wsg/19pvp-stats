@@ -36,14 +36,39 @@
 
   /* ---- player card ---- */
   .who{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:2px}
-  .ticker{display:flex;align-items:center;gap:10px;min-height:26px;margin:14px 0 18px;
-          font-size:14.5px;color:var(--ink2)}
-  .ticker b{color:var(--ink);font-weight:600}
-  .ticker .line{transition:opacity .35s ease}
-  .ticker .dots{display:flex;gap:4px;margin-left:auto}
-  .ticker .dots i{width:5px;height:5px;border-radius:50%;background:var(--axis);
-                  display:block}
-  .ticker .dots i.on{background:var(--ink2)}
+  .ticker{margin:16px 0 22px}
+  .tk{position:relative;display:flex;align-items:center;gap:16px;
+      background:var(--surface);border:1px solid var(--grid);border-left:4px solid var(--axis);
+      border-radius:0 var(--radius) var(--radius) 0;padding:12px 16px 14px;overflow:hidden}
+  .tk-body{flex:1;min-width:0;cursor:pointer;transition:opacity .28s ease}
+  .tk-top{display:flex;align-items:center;gap:9px;margin-bottom:3px}
+  .tk-badge{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;
+            font-weight:600;color:var(--ink2);background:var(--page);
+            border:1px solid var(--grid);border-radius:999px;padding:2px 8px;
+            white-space:nowrap}
+  .tk-badge.now{color:var(--accent);background:var(--accent-soft);border-color:transparent}
+  .tk-badge.rec{color:var(--ink);background:var(--grid);border-color:transparent}
+  .tk-label{font-size:13px;color:var(--ink2);overflow:hidden;text-overflow:ellipsis;
+            white-space:nowrap}
+  .tk-main{display:flex;align-items:baseline;gap:10px;min-width:0}
+  .tk-name{font-size:19px;font-weight:600;overflow:hidden;text-overflow:ellipsis;
+           white-space:nowrap}
+  .tk-val{font-size:19px;font-weight:600;color:var(--ink);white-space:nowrap}
+  .tk-val::before{content:"·";color:var(--axis);margin-right:10px;font-weight:400}
+  .tk-nav{display:flex;align-items:center;gap:4px;flex-shrink:0}
+  .tk-nav button{border:1px solid var(--grid);background:var(--surface);color:var(--ink2);
+                 border-radius:50%;width:26px;height:26px;font-size:15px;line-height:1;
+                 font-family:inherit;cursor:pointer;padding:0}
+  .tk-nav button:hover{border-color:var(--accent);color:var(--accent)}
+  .tk-count{font-size:11.5px;color:var(--muted);min-width:44px;text-align:center;
+            font-variant-numeric:tabular-nums}
+  .tk-bar{position:absolute;left:0;right:0;bottom:0;height:2px;background:var(--page)}
+  .tk-bar i{display:block;height:100%;width:0}
+  @keyframes tkfill{from{width:0}to{width:100%}}
+  @media (max-width:560px){
+    .tk-label{display:none}
+    .tk-count{display:none}
+  }
   .controls{display:flex;align-items:center;gap:22px;flex-wrap:wrap;margin:0 0 10px}
   .controls .units{margin:0}
   .controls .switch{margin:0}
@@ -58,8 +83,9 @@
   .board{background:var(--surface);border:1px solid var(--grid);
          border-radius:var(--radius);padding:12px 14px}
   .board h4{margin:0 0 8px;font-size:13.5px;font-weight:600;color:var(--ink)}
-  .board h4 .sub{display:block;font-size:11.5px;font-weight:400;color:var(--muted);
-                 margin-top:1px}
+  /* Inline, not a second line: a board with a threshold would otherwise stand
+     taller than the ones beside it and break the row. */
+  .board h4 .sub{font-size:11.5px;font-weight:400;color:var(--muted)}
   .board ol{margin:0;padding:0;list-style:none;counter-reset:r}
   .board li{position:relative;display:flex;align-items:baseline;gap:8px;
             padding:4px 0 9px;font-size:13px;counter-increment:r}
@@ -970,50 +996,98 @@ function buildFacts(){
     for (const k of TICK_STATS){
       const best = recs.reduce((a, b) => (b.sum[k] || 0) > (a.sum[k] || 0) ? b : a);
       if ((best.sum[k] || 0) > 0)
-        out.push([`Most ${phrase(k)} ${label}: `, best, val(k, best.sum[k])]);
+        out.push({badge: label, label: `Most ${phrase(k)}`,
+                  who: best, value: val(k, best.sum[k])});
     }
     const loser = recs.reduce((a, b) =>
       (b.decided - b.wins) > (a.decided - a.wins) ? b : a);
     if (loser.decided - loser.wins > 0)
-      out.push([`Most matches lost ${label}: `, loser, fmt(loser.decided - loser.wins)]);
+      out.push({badge: label, label: "Most matches lost",
+                who: loser, value: fmt(loser.decided - loser.wins)});
   }
   // Single-match records, which have no window: a best is a best.
   const all = HAS_CONTESTED && !allLobbies ? DATA.playersContested : DATA.players;
   for (const k of ["damageDone", "healingDone", "flagCarryTime", "damageOnEFC"]){
     const best = all.reduce((a, b) => (b.best[k] || 0) > (a.best[k] || 0) ? b : a);
     if ((best.best[k] || 0) > 0)
-      out.push([`Best single match for ${phrase(k)}: `, best,
-                val(k, best.best[k])]);
+      out.push({badge: "record", label: `Best single match for ${phrase(k)}`,
+                who: best, value: val(k, best.best[k])});
   }
   return out;
 }
 
+const TICK_MS = 6000;
 let FACTS = [], tickAt = 0, tickTimer = null;
+
 function renderTicker(){
   FACTS = buildFacts();
   const el = document.getElementById("ticker");
   if (!FACTS.length){ el.innerHTML = ""; return; }
   if (tickAt >= FACTS.length) tickAt = 0;
-  el.innerHTML = `<span class="line" id="tickLine"></span>
-    <span class="dots" id="tickDots"></span>`;
-  document.getElementById("tickDots").innerHTML =
-    FACTS.map(() => "<i></i>").join("");
+  el.innerHTML = `
+    <div class="tk" id="tkCard">
+      <div class="tk-body" id="tkBody">
+        <div class="tk-top">
+          <span class="tk-badge" id="tkBadge"></span>
+          <span class="tk-label" id="tkLabel"></span>
+        </div>
+        <div class="tk-main">
+          <span class="tk-name" id="tkName"></span>
+          <span class="tk-val" id="tkVal"></span>
+        </div>
+      </div>
+      <div class="tk-nav">
+        <button type="button" id="tkPrev" aria-label="Previous fact">‹</button>
+        <span class="tk-count" id="tkCount"></span>
+        <button type="button" id="tkNext" aria-label="Next fact">›</button>
+      </div>
+      <div class="tk-bar"><i id="tkFill"></i></div>
+    </div>`;
+  const step = d => { tickAt = (tickAt + d + FACTS.length) % FACTS.length; drawTick(); arm(); };
+  document.getElementById("tkPrev").onclick = e => { e.stopPropagation(); step(-1); };
+  document.getElementById("tkNext").onclick = e => { e.stopPropagation(); step(1); };
+  // Hovering holds the fact still, so a long name can actually be read.
+  const card = document.getElementById("tkCard");
+  card.onmouseenter = () => { if (tickTimer) clearInterval(tickTimer); tickTimer = null;
+                              document.getElementById("tkFill").style.animationPlayState = "paused"; };
+  card.onmouseleave = () => { document.getElementById("tkFill").style.animationPlayState = "running";
+                              arm(); };
   drawTick();
-  if (tickTimer) clearInterval(tickTimer);
-  tickTimer = setInterval(() => { tickAt = (tickAt + 1) % FACTS.length; drawTick(); }, 5000);
+  arm();
 }
+
+function arm(){
+  if (tickTimer) clearInterval(tickTimer);
+  tickTimer = setInterval(() => { tickAt = (tickAt + 1) % FACTS.length; drawTick(); }, TICK_MS);
+}
+
 function drawTick(){
-  const line = document.getElementById("tickLine");
-  if (!line) return;
-  const [label, p, value] = FACTS[tickAt];
-  line.innerHTML = `${label}<b style="color:${readable(classColor(p.class))}">${p.name}</b>
-    <span> — ${value}</span>`;
-  const dots = document.getElementById("tickDots").children;
-  for (let i = 0; i < dots.length; i++)
-    dots[i].className = i === tickAt ? "on" : "";
-  // Clicking the strip opens whoever it is talking about.
-  line.style.cursor = "pointer";
-  line.onclick = () => { const q = P.find(x => x.id === p.id); if (q) openPlayer(q); };
+  const body = document.getElementById("tkBody");
+  if (!body) return;
+  const f = FACTS[tickAt];
+  const col = readable(classColor(f.who.class));
+  document.getElementById("tkCard").style.borderLeftColor = classColor(f.who.class);
+  const badge = document.getElementById("tkBadge");
+  badge.textContent = f.badge;
+  badge.className = "tk-badge" + (f.badge === "today" ? " now"
+                                : f.badge === "record" ? " rec" : "");
+  document.getElementById("tkLabel").textContent = f.label;
+  const name = document.getElementById("tkName");
+  name.textContent = f.who.name;
+  name.style.color = col;
+  document.getElementById("tkVal").textContent = f.value;
+  document.getElementById("tkCount").textContent = `${tickAt + 1} / ${FACTS.length}`;
+
+  // Restart the fill by reflowing it - re-assigning the same animation does not.
+  const fill = document.getElementById("tkFill");
+  fill.style.animation = "none";
+  void fill.offsetWidth;
+  fill.style.animation = `tkfill ${TICK_MS}ms linear`;
+  fill.style.background = classColor(f.who.class);
+
+  body.style.opacity = "0";
+  requestAnimationFrame(() => { body.style.opacity = "1"; });
+  body.onclick = () => { const q = P.find(x => x.id === f.who.id); if (q) openPlayer(q); };
 }
 
 /* ---------- boards, filtered by class ----------
@@ -1115,7 +1189,7 @@ function renderClassBoards(){
       .sort((a, b2) => b2[1] - a[1]).slice(0, BOARD_TOP);
     if (!best.length) return "";
     const max = best[0][1];
-    const sub = b.note ? `<span class="sub">${b.note()}</span>` : "";
+    const sub = b.note ? ` <span class="sub">(${b.note()})</span>` : "";
     return `<div class="board"><h4>${label}${sub}</h4><ol>${best.map(([p, v]) =>
       `<li><span class="bar"><i style="width:${(v / max * 100).toFixed(1)}%;
            background:${classColor(p.class)}"></i></span>
