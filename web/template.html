@@ -58,6 +58,8 @@
   .board{background:var(--surface);border:1px solid var(--grid);
          border-radius:var(--radius);padding:12px 14px}
   .board h4{margin:0 0 8px;font-size:13.5px;font-weight:600;color:var(--ink)}
+  .board h4 .sub{display:block;font-size:11.5px;font-weight:400;color:var(--muted);
+                 margin-top:1px}
   .board ol{margin:0;padding:0;list-style:none;counter-reset:r}
   .board li{position:relative;display:flex;align-items:baseline;gap:8px;
             padding:4px 0 9px;font-size:13px;counter-increment:r}
@@ -1018,11 +1020,33 @@ function drawTick(){
    Built from the records rather than from the rendered charts: an image cannot
    be narrowed to one class, and this is the page where a shaman wants to see
    only shamans. Follows the same window and lobby switches as everything else. */
-const BOARD_STATS = ["flagCaptures", "flagReturns", "flagCarryTime", "attemptsOnFlag",
-  "damageOnEFC", "healsOnFC", "damageDone", "healingDone", "absorbsDone",
-  "damageTaken", "killingBlows", "honorableKills", "deaths", "successfulInterrupts",
-  "fakeCastInterrupts", "hardCCDuration", "softCCDuration", "dispelsOffensive",
-  "dispelsDefensive"];
+// A conversion rate needs a floor of attempts, scaled to the window like the
+// match threshold is: 25 pickups is a season's worth and unreachable in a day.
+const pickupFloor = () => Math.max(5,
+  Math.round(META.minPickups * scopeMin() / META.minGames));
+
+/* Boards come in two kinds. Most are a shipped statistic and follow the measure
+   switch; four are derived and do not - a win rate per minute is not a thing,
+   and neither is a game per game. Those four carry their own threshold. */
+const BOARDS = [
+  {id: "games",       label: "Games played", fixed: true,
+   get: p => p.games,   fmt: fmt},
+  {id: "wins",        label: "Games won",    fixed: true,
+   get: p => p.wins,    fmt: fmt},
+  {id: "winrate",     label: "Win rate",     fixed: true,
+   get: p => p.winrate, fmt: pct, ok: p => p.decided >= scopeMin(),
+   note: () => `${scopeMin()}+ decided matches`},
+  {id: "flagCaptures", stat: "flagCaptures"},
+  {id: "capRate",     label: "Flag conversion rate", fixed: true,
+   get: p => p.capRate, fmt: pct,
+   ok: p => (p.sum.attemptsOnFlag || 0) >= pickupFloor(),
+   note: () => `${pickupFloor()}+ pickups`},
+  ...["flagReturns", "flagCarryTime", "attemptsOnFlag", "damageOnEFC", "healsOnFC",
+      "damageDone", "healingDone", "absorbsDone", "damageTaken", "killingBlows",
+      "honorableKills", "deaths", "successfulInterrupts", "fakeCastInterrupts",
+      "hardCCDuration", "softCCDuration", "dispelsOffensive", "dispelsDefensive"]
+     .map(k => ({id: k, stat: k})),
+];
 const MEASURES = [["sum", "total"], ["pm", "per minute"], ["pg", "per game"]];
 const BOARD_TOP = 5;
 let classFilter = "", measure = "sum";
@@ -1063,7 +1087,9 @@ function renderClassBoards(){
     `${pool.length} character${pool.length === 1 ? "" : "s"} in view`
     + (classFilter ? ` playing ${classFilter}` : "")
     + (measure === "sum" ? ", every character with a recorded match."
-       : `, needing ${scopeMin()}+ matches for a rate.`);
+       : `, needing ${scopeMin()}+ matches for a rate.`)
+    + " Games, wins and the two rates below them are counted per character rather "
+    + "than per minute or per game, so the measure above leaves them alone.";
 
   // A total is a count and prints as one; only the rate measures carry decimals.
   const fmtFor = k => v => SEC.has(k) ? dur(v)
@@ -1074,17 +1100,27 @@ function renderClassBoards(){
     el.innerHTML = `<p class="muted">Nobody matches that filter in this window.</p>`;
     return;
   }
-  el.innerHTML = BOARD_STATS.map(k => {
-    const best = pool.map(p => [p, boardValue(p, k)])
+  // The derived boards ignore the measure switch, so they always rank the class
+  // pool, not the pool the switch happens to be showing.
+  const byClass = P.filter(p => !classFilter || p.class === classFilter);
+
+  el.innerHTML = BOARDS.map(b => {
+    const source = b.fixed ? byClass : pool;
+    const value = b.fixed ? b.get : (p => boardValue(p, b.stat));
+    const label = b.fixed ? b.label : (LBL[b.stat] || b.stat);
+    const format = b.fixed ? b.fmt : fmtFor(b.stat);
+    const best = source.filter(p => !b.ok || b.ok(p))
+      .map(p => [p, value(p)])
       .filter(([, v]) => v != null && v > 0)
-      .sort((a, b) => b[1] - a[1]).slice(0, BOARD_TOP);
+      .sort((a, b2) => b2[1] - a[1]).slice(0, BOARD_TOP);
     if (!best.length) return "";
     const max = best[0][1];
-    return `<div class="board"><h4>${LBL[k] || k}</h4><ol>${best.map(([p, v]) =>
+    const sub = b.note ? `<span class="sub">${b.note()}</span>` : "";
+    return `<div class="board"><h4>${label}${sub}</h4><ol>${best.map(([p, v]) =>
       `<li><span class="bar"><i style="width:${(v / max * 100).toFixed(1)}%;
            background:${classColor(p.class)}"></i></span>
        <span class="nm" style="color:${readable(classColor(p.class))}">${p.name}</span>
-       <span class="v">${fmtFor(k)(v)}</span></li>`).join("")}</ol></div>`;
+       <span class="v">${format(v)}</span></li>`).join("")}</ol></div>`;
   }).join("");
 }
 
