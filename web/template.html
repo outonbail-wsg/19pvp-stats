@@ -1463,9 +1463,31 @@ renderTicker();
 setView(viewFromHash() || view, {push: false});
 route();
 
-document.getElementById("foot").textContent =
-  `Source: 19pvp export ${META.source} · generated ${META.generated}. `
-  + `Bots are not in the export, so recorded players are the real ones.`;
+/* The build stamp is UTC, which is what every chart footnote says too - but a
+   reader two hours ahead sees "22:11" just after midnight and reads it as
+   yesterday evening rather than as twenty minutes ago. The age says plainly how
+   old the numbers are, in nobody's timezone. */
+function buildAge(){
+  const t = Date.parse(META.generated.replace(" UTC", "Z").replace(" ", "T"));
+  if (!t) return "";
+  const mins = Math.round((Date.now() - t) / 60000);
+  if (mins < 0) return "just now";
+  if (mins < 2) return "just now";
+  if (mins < 60) return `${mins} minutes ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs} hour${hrs === 1 ? "" : "s"} ago`;
+  const days = Math.round(hrs / 24);
+  return `${days} day${days === 1 ? "" : "s"} ago`;
+}
+function drawFoot(){
+  const age = buildAge();
+  document.getElementById("foot").textContent =
+    `Source: 19pvp export ${META.source} · built ${META.generated}`
+    + (age ? ` (${age})` : "") + ". "
+    + `Bots are not in the export, so recorded players are the real ones.`;
+}
+drawFoot();
+setInterval(drawFoot, 60000);   // so a tab left open stops claiming to be fresh
 </script>
 <!--ANALYTICS-->
 </body>
