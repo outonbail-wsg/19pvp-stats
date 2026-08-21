@@ -253,9 +253,20 @@ seven-day heading. The match threshold drops with the window: 10, 5, 3.
 
 A picked range interpolates its threshold between those anchors rather than
 looking one up — three matches over a single day, the full bar over the whole
-period — so picking every date by hand gives the same pool *All time* does. The
-charts do not follow any of this: they are rendered once per build over the whole
-period, and the gallery says so whenever a window is on.
+period — so picking every date by hand gives the same pool *All time* does.
+
+**The charts follow the presets too.** Every build renders six sets — each lobby
+filter over each window — into `charts/`, `charts-contested/`, `charts-all-week/`
+and so on, and the gallery switches folders with the switch. That costs about
+105 seconds and 54 MB, against 25 seconds and 8.7 MB for a single set. A picked
+range gets no set and never will, there being no end of possible ranges, so the
+picker is not offered on a gallery page and moving to one falls back to the whole
+period — keeping the dates, so the picker restores them on the way back.
+
+A narrow window can leave a chart with nothing to draw. That is the data
+speaking, not a fault, so those renders pass `--allow-failures`: the chart is
+dropped from that set's gallery instead of failing the build. Over the whole
+period a failure still is a fault, and still fails it.
 
 **Linkable characters.** A character view has its own address, `…/#/c/Name`, so a
 player can bookmark their page or post it. Close it with the button on the card or

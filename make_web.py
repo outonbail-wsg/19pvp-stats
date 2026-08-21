@@ -65,43 +65,69 @@ def main(argv=None) -> int:
     args = parse_args(argv)
     csv_path = args.csv or data.default_csv(ROOT / "Data")
 
-    charts_contested = args.charts.parent / (args.charts.name + "-contested")
+    import make_charts
+
+    # One set per lobby filter per window. The page switches between them by
+    # folder, so the presets narrow the pictures the same way they narrow the
+    # boards. A hand-picked range has no set and cannot get one - there is no
+    # end of possible ranges to render - so the picker is offered only where it
+    # changes something.
+    sets = [(f"{lobby}-{win}" if win != "all" else lobby, lobby, win)
+            for win in ("all", "week", "yesterday")
+            for lobby in ("all", "contested")]
+    site = args.outdir
+    chart_dir = {sid: ("charts" if sid == "all" else f"charts-{sid}")
+                 for sid, _, _ in sets}
+    rendered = {}
+
     if not args.skip_charts:
-        import make_charts
         common = ["--csv", str(csv_path), "--tz", args.tz,
                   "--min-games", str(args.min_games)]
-        for outdir, lobby in ((args.charts, "all"), (charts_contested, "contested")):
-            rc = make_charts.main(common + ["--outdir", str(outdir), "--lobby", lobby])
+        for sid, lobby, win in sets:
+            outdir = args.charts.parent / f"{args.charts.name}-{sid}"
+            cmd = common + ["--outdir", str(outdir), "--lobby", lobby,
+                            "--window", win]
+            # A narrow window may leave a chart with nothing to draw. That is
+            # the data speaking, so it must not fail the build - but over the
+            # whole period it would be a real fault, and there it still does.
+            if win != "all":
+                cmd.append("--allow-failures")
+            rc = make_charts.main(cmd)
             if rc:
-                print(f"charts failed for lobby={lobby}; aborting", file=sys.stderr)
+                print(f"charts failed for {sid}; aborting", file=sys.stderr)
                 return rc
+
+    for sid, lobby, win in sets:
+        src = args.charts.parent / f"{args.charts.name}-{sid}"
+        target = site / chart_dir[sid]
+        target.mkdir(parents=True, exist_ok=True)
+        found = []
+        for png in sorted(src.glob("*.png")):
+            shutil.copy2(png, target / png.name)
+            found.append(png.name)
+        rendered[sid] = found
+
+    # The charts that compare contested against bot-filled lobbies exist only in
+    # the all-lobby render - and they are exactly the ones a reader in contested
+    # view most wants. Carry them across from the same window, so the pair still
+    # covers the same days; their own footnotes say they cover every lobby.
+    for sid, lobby, win in sets:
+        if lobby != "contested":
+            continue
+        twin = "all" if win == "all" else f"all-{win}"
+        for name in sorted(make_charts.ALL_LOBBIES_ONLY):
+            src = site / chart_dir[twin] / f"{name}.png"
+            if src.exists() and src.name not in rendered[sid]:
+                shutil.copy2(src, site / chart_dir[sid] / src.name)
+                rendered[sid].append(src.name)
+        rendered[sid].sort()
 
     theme.apply_theme()
     ctx = context.build(csv_path, args.outdir, tz=args.tz, min_games=args.min_games)
     ctx_contested = context.build(csv_path, args.outdir, tz=args.tz,
                                   min_games=args.min_games, lobby="contested")
 
-    site = args.outdir
-    names, contested_names = [], []
-    for src, sub, sink in ((args.charts, "charts", names),
-                           (charts_contested, "charts-contested", contested_names)):
-        target = site / sub
-        target.mkdir(parents=True, exist_ok=True)
-        for png in sorted(src.glob("*.png")):
-            shutil.copy2(png, target / png.name)
-            sink.append(png.name)
-
-    # The charts that compare contested against bot-filled lobbies exist only in
-    # the all-lobby render - and they are exactly the ones a reader in contested
-    # view most wants. Carry them across so the gallery never loses them; their
-    # own footnotes already say they cover every lobby.
-    import make_charts
-    for name in sorted(make_charts.ALL_LOBBIES_ONLY):
-        src = args.charts / f"{name}.png"
-        if src.exists() and f"{name}.png" not in contested_names:
-            shutil.copy2(src, site / "charts-contested" / src.name)
-            contested_names.append(src.name)
-    contested_names.sort()
+    names, contested_names = rendered["all"], rendered["contested"]
 
     # A chart with no gallery text still renders, but silently as a bare file
     # name - so say it out loud rather than letting the wording drift.
@@ -109,7 +135,8 @@ def main(argv=None) -> int:
     if missing:
         print(f"no gallery description for: {', '.join(missing)}", file=sys.stderr)
 
-    payload = webexport.build_payload(ctx, names, ctx_contested, contested_names)
+    payload = webexport.build_payload(ctx, names, ctx_contested,
+                                      contested_names, chart_sets=rendered)
     webexport.write_payload(payload, site / "stats.json")
 
     # Inline the data so the page also works from file:// - a browser blocks
@@ -128,7 +155,8 @@ def main(argv=None) -> int:
 
     size = (site / "index.html").stat().st_size / 1024
     print(f"\nSite      : {site}")
-    print(f"Charts    : {len(names)} all-lobby, {len(contested_names)} contested")
+    print("Charts    : "
+          + ", ".join(f"{sid} {len(v)}" for sid, v in rendered.items()))
     print(f"Players   : {len(payload['players'])}")
     print(f"Page      : index.html, {size:.0f} KB with data inlined")
     return 0

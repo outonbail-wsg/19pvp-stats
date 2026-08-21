@@ -26,6 +26,7 @@ class Ctx:
     min_games: int             # threshold for average-based leaderboards
     outdir: Path
     lobby: str = "all"         # "all" or "contested"
+    window: str = "all"        # "all", "week" or "yesterday"
 
     meta: dict = field(default_factory=dict)
 
@@ -75,12 +76,37 @@ def contested_events(matches: pd.DataFrame) -> pd.Index:
                    & (matches["tracked_team1"] >= data.CONTESTED_PER_TEAM)].index
 
 
+DAY_MS = 86_400_000
+
+# Windows the charts can be rendered over, matching the ones the page offers:
+# name -> (days, offset in days off the newest one). The newest day is always a
+# partial one, so a single day means the last complete one.
+WINDOWS = {"all": None, "week": (7, 0), "yesterday": (1, 1)}
+
+
+def window_range(w, window: str):
+    """[from, to) in epoch ms for `window`, anchored on the newest match in `w`.
+
+    Anchored on the data rather than on the clock, and on the already
+    lobby-filtered data, so the page and the charts cut at the same instant.
+    """
+    spec = WINDOWS.get(window)
+    if spec is None or w.empty:
+        return None
+    days, offset = spec
+    day_start = int(w["at"].max()) // DAY_MS * DAY_MS
+    lo = day_start - (days - 1 + offset) * DAY_MS
+    hi = day_start - (offset - 1) * DAY_MS if offset else None
+    return lo, hi
+
+
 def build(csv_path: Path, outdir: Path, tz: str = "UTC", min_games: int = 10,
-          lobby: str = "all") -> Ctx:
+          lobby: str = "all", window: str = "all") -> Ctx:
     """Build the shared context.
 
-    `lobby="contested"` drops every match that bots had to fill, and rebuilds the
-    aggregates from what is left - the same code path, a smaller slice.
+    `lobby="contested"` drops every match that bots had to fill, and `window`
+    narrows to a slice of days - both rebuild the aggregates from what is left,
+    the same code path over a smaller frame.
     """
     raw = data.load_raw(csv_path, tz=tz)
     w = data.wsg(raw)
@@ -90,9 +116,27 @@ def build(csv_path: Path, outdir: Path, tz: str = "UTC", min_games: int = 10,
         raw = raw[(raw["kind"] != "wsg") | raw["eventId"].isin(keep)].copy()
     elif lobby != "all":
         raise ValueError(f"unknown lobby filter: {lobby!r}")
+
+    if window not in WINDOWS:
+        raise ValueError(f"unknown window: {window!r}")
+    rng = window_range(w, window)
+    if rng is not None:
+        lo, hi = rng
+
+        def inside(at):
+            keep = at >= lo
+            return keep if hi is None else (keep & (at < hi))
+
+        # The whole export, arena included. Cutting only the WSG rows would leave
+        # the arena charts covering the full period under a one-day heading, and
+        # the day count - which the overview divides by - reading nine days for a
+        # window one day long.
+        w = w[inside(w["at"])].copy()
+        raw = raw[inside(raw["at"])].copy()
     return Ctx(
         source=csv_path,
         lobby=lobby,
+        window=window,
         tz=tz,
         raw=raw,
         wsg=w,

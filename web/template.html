@@ -297,8 +297,7 @@ function applyScope(){
   QUAL = P.filter(p => p.games >= scopeMin());
   CHARTS = contested && DATA.chartsContested.length
          ? DATA.chartsContested : DATA.charts;
-  VIEWS = (contested && DATA.chartsContested.length
-        ? DATA.chartViewsContested : DATA.chartViews) || [];
+  VIEWS = (DATA.chartSets || {})[chartSetId()] || [];
 }
 
 /* ---------- formatting ---------- */
@@ -869,8 +868,20 @@ const chartInfo = f => (DATA.chartInfo || {})[chartStem(f)] || {};
 const chartLabel = f => chartInfo(f).title
                      || f.replace(/^\d+_/, "").replace(/\.png$/, "").replace(/_/g, " ");
 const chartBlurb = f => chartInfo(f).blurb || "";
-const chartDir = () => (HAS_CONTESTED && !allLobbies && DATA.chartsContested.length)
-                       ? "charts-contested" : "charts";
+/* Charts are rendered per lobby filter per window, one folder each. A picked
+   range has no folder and never will - there is no end of possible ranges - so
+   the gallery falls back to the whole period there, and the picker is offered
+   only on the pages it can actually change. */
+const CHART_WINDOWS = new Set(["all", "week", "yesterday"]);
+function chartSetId(){
+  const lobby = (HAS_CONTESTED && !allLobbies) ? "contested" : "all";
+  const win = CHART_WINDOWS.has(scope) ? scope : "all";
+  return win === "all" ? lobby : `${lobby}-${win}`;
+}
+const chartDir = () => {
+  const sid = chartSetId();
+  return sid === "all" ? "charts" : `charts-${sid}`;
+};
 function renderGallery(){
   if (!CHARTS.length){
     gal.innerHTML = `<p class="muted">No chart images alongside this file.</p>`;
@@ -1008,6 +1019,13 @@ function setView(slug, {push = true} = {}){
   Object.values(PAGE_EL).forEach(id =>
     document.getElementById(id).classList.add("hidden"));
   document.getElementById(PAGE_EL[pg.kind]).classList.remove("hidden");
+  if (pg.kind === "charts" && scopeDef().custom){
+    scope = "all";               // dates are kept, the picker restores them
+    applyScope();
+    updateNote();
+    renderTicker();
+  }
+  renderScopeBar();
   if (pg.kind === "charts") renderGallery();
   if (pg.kind === "classes") renderClassBoards();
   closeLightbox();
@@ -1298,18 +1316,22 @@ function renderScopeBar(){
   // The charts are rendered once per build over the whole period. Say so when a
   // window is on, or the reader takes "Today" to apply to the pictures as well.
   const g = document.getElementById("galScope");
-  g.textContent = scopeRange() == null ? ""
-    : "The charts below always cover the whole period — "
-      + (scopeDef().custom ? "the dates you picked apply"
-                           : `${scopeDef().label.toLowerCase()} applies`)
-      + " to the character search and its boards, not to the rendered images.";
-  scopeBar.innerHTML = SCOPES.map(sc =>
+  g.textContent = !scopeRange() ? ""
+    : scopeDef().custom
+      ? "The charts below cover the whole period. A picked range only narrows the "
+        + "boards and the character pages — the images are drawn once per build, "
+        + "and there is no end of ranges to draw them for."
+      : `The charts below are drawn over ${scopeDef().label.toLowerCase()} too.`;
+  // A gallery page has a rendered set per preset but none for a picked range,
+  // so the picker is not offered there rather than sitting inert.
+  const canPick = pageOf(view)?.kind !== "charts";
+  scopeBar.innerHTML = SCOPES.filter(sc => canPick || !sc.custom).map(sc =>
     `<button type="button" data-scope="${sc.id}"${sc.id === scope ? ' class="on"' : ""}
      >${sc.label}</button>`).join("");
   // The picker only exists while its own scope is on, and it opens on the whole
   // period so the first thing it shows is what the reader was already looking at.
   const box = document.getElementById("dateRange");
-  box.classList.toggle("hidden", !scopeDef().custom);
+  box.classList.toggle("hidden", !(scopeDef().custom && canPick));
   if (scopeDef().custom){
     const from = document.getElementById("dFrom"), to = document.getElementById("dTo");
     if (!customFrom) customFrom = META.periodStart;
@@ -1333,6 +1355,9 @@ function refreshScope(){
   updateNote();
   renderTicker();
   if (view === "classes") renderClassBoards();
+  // The gallery follows the window now too - each preset has its own rendered
+  // set - so it has to be redrawn like everything else.
+  if (pageOf(view)?.kind === "charts"){ renderGallery(); closeLightbox(); }
   // Whoever is on screen is redrawn from the new window, or dropped if they did
   // not play in it at all.
   const shown = document.getElementById("card").dataset.player;

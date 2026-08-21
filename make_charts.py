@@ -56,6 +56,12 @@ def parse_args(argv=None):
                    help="only charts whose file name starts with one of these prefixes")
     p.add_argument("--lobby", choices=["all", "contested"], default="all",
                    help="restrict every chart to contested lobbies")
+    p.add_argument("--window", choices=list(context.WINDOWS), default="all",
+                   help="restrict every chart to a slice of days")
+    p.add_argument("--allow-failures", action="store_true",
+                   help="report charts that could not be drawn but still exit 0. "
+                        "For a narrow window, a chart with nothing to show is the "
+                        "data speaking rather than a bug.")
     return p.parse_args(argv)
 
 
@@ -66,7 +72,7 @@ def main(argv=None) -> int:
 
     theme.apply_theme()
     ctx = context.build(csv_path, args.outdir, tz=args.tz, min_games=args.min_games,
-                        lobby=args.lobby)
+                        lobby=args.lobby, window=args.window)
 
     print(f"Source : {csv_path.name}")
     print(f"Period : {ctx.period_label} ({ctx.tz})")
@@ -74,9 +80,10 @@ def main(argv=None) -> int:
           f"{ctx.wsg['playerGuid'].nunique()} characters, "
           f"{len(ctx.arena)} arena records")
     print(f"Lobby  : {args.lobby}")
+    print(f"Window : {args.window}")
     print(f"Output : {args.outdir}\n")
 
-    failures = 0
+    failed: list[str] = []
     for module in MODULES:
         for name, func in module.CHARTS:
             if args.only and not any(name.startswith(p) for p in args.only):
@@ -90,13 +97,20 @@ def main(argv=None) -> int:
                 plt.close(fig)
                 print(f"  ok   {path.name}")
             except Exception:
-                failures += 1
+                failed.append(name)
                 print(f"  FAIL {path.name}")
                 traceback.print_exc()
                 plt.close("all")
+                # A half-written file would ship and show as a broken image, so
+                # drop it and let the gallery leave that chart out of this set.
+                path.unlink(missing_ok=True)
 
-    print(f"\nDone. {failures} error(s)." if failures else "\nDone.")
-    return 1 if failures else 0
+    print()
+    print(f"Done. {len(failed)} error(s)." if failed else "Done.")
+    if failed and args.allow_failures:
+        print("Not fatal: rendered with --allow-failures.")
+        return 0
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

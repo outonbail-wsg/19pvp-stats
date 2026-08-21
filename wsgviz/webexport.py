@@ -195,7 +195,7 @@ def _chart_info(*file_lists) -> dict:
 
 
 def build_payload(ctx: Ctx, chart_files=None, ctx_contested: Ctx | None = None,
-                  contested_charts=None) -> dict:
+                  contested_charts=None, chart_sets=None) -> dict:
     """The full payload, with a second set of per-character numbers computed
     from contested lobbies only so the page can switch between them."""
     w = ctx.wsg
@@ -243,12 +243,12 @@ def build_payload(ctx: Ctx, chart_files=None, ctx_contested: Ctx | None = None,
         # Title and explanation per chart, keyed by file stem. The gallery shows
         # the image without its own title until it is opened, so it needs both.
         "chartInfo": _chart_info(chart_files, contested_charts),
-        # The gallery pages, each carrying its sections in reading order. Built
-        # per chart set, because a contested build ships a different list.
-        "chartViews": descriptions.views(
-            f.rsplit(".", 1)[0] for f in (chart_files or [])),
-        "chartViewsContested": descriptions.views(
-            f.rsplit(".", 1)[0] for f in (contested_charts or [])),
+        # The gallery pages per chart set, in reading order. Built from each
+        # set's own file list rather than from one shared list: a narrow window
+        # can leave a chart with nothing to draw, and a gallery still pointing
+        # at it would show a broken image.
+        "chartSets": {sid: descriptions.views(f.rsplit(".", 1)[0] for f in files)
+                      for sid, files in (chart_sets or {}).items()},
     }
 
 
