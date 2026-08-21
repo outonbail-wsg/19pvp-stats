@@ -102,7 +102,7 @@ def leaderboard_per_minute(ctx: Ctx):
         ctx, RATE_STATS + ["killingBlows", "absorbsDone", "successfulInterrupts"],
         "WSG stat leaders: output per minute",
         f"The {TABLE_TOP} leading characters per statistic, per minute played, "
-        f"characters with at least {ctx.min_games} matches",
+        f"characters with at least {ctx.games_phrase()}",
         f"{len(q)} of {len(ctx.totals)} characters clear the threshold. Rates are per "
         "minute actually played, not per match length.",
         suffix="_pm", totals=q, fmt=T.compact, unit="/min")
@@ -118,7 +118,7 @@ def leaderboard_winrate(ctx: Ctx):
     fig = plt.figure(figsize=(12.5, 8.2))
     top = T.figure_title(
         fig, "WSG best win rate",
-        f"Top 15 characters with at least {ctx.min_games} decided matches")
+        f"Top 15 characters with at least {ctx.games_phrase('decided matches')}")
     bottom = T.footnote(fig, ctx.source_note(
         "The thin line shows how certain the figure is at this number of games - "
         "where the bands overlap, the order between them is not settled."))

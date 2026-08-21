@@ -43,6 +43,24 @@ ALL_LOBBIES_ONLY = {
 }
 
 
+# Charts a single day cannot carry. Not a matter of thin data - these read the
+# passage of days itself, and over one day there is nothing left to read: a
+# distribution collapses to one bar, a curve to one point, a weekday grid to one
+# column. They are dropped from that set rather than shipped empty, and the
+# gallery is built from what each set actually rendered.
+WINDOW_EXCLUDES = {
+    "yesterday": {
+        "02_bracket_population",   # buckets characters by days active; all in "1"
+        "04_player_base",          # returning vs new per day; one point, no curve
+        "06_activity_heatmap",     # weekday x hour; one column, six blank
+        "07_activity_per_day",     # one bar
+        "32_contested_record",     # needs 8 decided in each kind of lobby
+        "38_rivalries",            # needs 8 meetings between the same two
+        "39_first_match",          # retention by career length; needs careers
+    },
+}
+
+
 def parse_args(argv=None):
     p = argparse.ArgumentParser(description="Render the WSG visualisations")
     p.add_argument("--csv", type=Path, default=None,
@@ -89,6 +107,9 @@ def main(argv=None) -> int:
             if args.only and not any(name.startswith(p) for p in args.only):
                 continue
             if args.lobby == "contested" and name in ALL_LOBBIES_ONLY:
+                continue
+            if name in WINDOW_EXCLUDES.get(args.window, ()):
+                print(f"  skip {name}.png  (nothing to read over {args.window})")
                 continue
             path = args.outdir / f"{name}.png"
             try:

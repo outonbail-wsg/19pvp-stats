@@ -61,6 +61,16 @@ def analytics_tag(endpoint: str) -> str:
             f'async src="//gc.zgo.at/count.js"></script>')
 
 
+def WINDOW_MIN_GAMES(base: int, window: str) -> int:
+    """Match threshold for a window's charts, matching the page's own tiers.
+
+    A bar meant for a fortnight empties a one-day board: nobody plays ten
+    matches in an evening, so a leaderboard filtered that way would be blank.
+    Yesterday runs unfiltered - over a single day the sample is the day.
+    """
+    return {"all": base, "week": max(1, round(base / 2)), "yesterday": 1}[window]
+
+
 def main(argv=None) -> int:
     args = parse_args(argv)
     csv_path = args.csv or data.default_csv(ROOT / "Data")
@@ -81,12 +91,12 @@ def main(argv=None) -> int:
     rendered = {}
 
     if not args.skip_charts:
-        common = ["--csv", str(csv_path), "--tz", args.tz,
-                  "--min-games", str(args.min_games)]
+        common = ["--csv", str(csv_path), "--tz", args.tz]
         for sid, lobby, win in sets:
             outdir = args.charts.parent / f"{args.charts.name}-{sid}"
             cmd = common + ["--outdir", str(outdir), "--lobby", lobby,
-                            "--window", win]
+                            "--window", win,
+                            "--min-games", str(WINDOW_MIN_GAMES(args.min_games, win))]
             # A narrow window may leave a chart with nothing to draw. That is
             # the data speaking, so it must not fail the build - but over the
             # whole period it would be a real fault, and there it still does.

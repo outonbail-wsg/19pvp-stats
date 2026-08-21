@@ -71,7 +71,7 @@ def role_map(ctx: Ctx):
     fig = plt.figure(figsize=(12, 7.6))
     top = T.figure_title(
         fig, "WSG damage vs healing per minute",
-        f"Each dot is one character with at least {ctx.min_games} matches, coloured by "
+        f"Each dot is one character with at least {ctx.games_phrase()}, coloured by "
         "class; dot size scales with matches played")
     bottom = T.footnote(fig, ctx.source_note(
         "Both axes per minute played."))
@@ -115,7 +115,7 @@ def player_profiles(ctx: Ctx):
         "Each axis is the character's percentile among all qualified characters – "
         "the outer ring is the highest value in the pool")
     bottom = T.footnote(fig, ctx.source_note(
-        f"Percentile among {len(q)} characters with >={ctx.min_games} matches, all axes "
+        f"Percentile among {len(q)} characters with >={ctx.games_phrase()}, all axes "
         "per minute. Area is meaningless - read each spoke on its own. " + PROFILE_KEY))
 
     cols, rows = 4, 2

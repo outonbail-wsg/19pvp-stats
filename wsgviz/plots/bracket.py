@@ -58,7 +58,7 @@ def population(ctx: Ctx):
     tiles = [
         (T.num(w["playerGuid"].nunique()), "characters", "seen in WSG"),
         (T.num(int((rows_per_char >= ctx.min_games).sum())), "regulars",
-         f">= {ctx.min_games} matches"),
+         f">= {ctx.games_phrase()}"),
         (T.num(int((days_active == 1).sum())), "one-day characters",
          "seen on a single day"),
         (T.num(days_active.median()), "median days active", "per character"),

@@ -47,6 +47,27 @@ class Ctx:
             return f"{a.day}–{b.day} {b:%b %Y}"
         return f"{a.day} {a:%b} – {b.day} {b:%b %Y}"
 
+    def games_phrase(self, noun: str = "matches") -> str:
+        """The match threshold as a sentence fragment: "10 matches", "1 match".
+
+        A window narrow enough to drop the threshold to one used to read "at
+        least 1 decided matches", so the wording lives here rather than being
+        typed out at each of the dozen places that quote it.
+        """
+        if self.min_games == 1:
+            noun = noun.replace("matches", "match")
+        return f"{self.min_games} {noun}"
+
+    @property
+    def min_pickups(self) -> int:
+        """Attempts a conversion rate needs, scaled to the window.
+
+        25 pickups is a fortnight's worth and unreachable in an evening, so the
+        floor rides on the match threshold: full over the whole period, three at
+        the least, which still keeps a single lucky grab off the board.
+        """
+        return max(3, round(data.MIN_PICKUPS * self.min_games / 10))
+
     def source_note(self, extra: str = "") -> str:
         """One short provenance line, plus only the notes a chart really needs.
 

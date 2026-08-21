@@ -369,7 +369,7 @@ const classPool = c => QUAL.filter(p => p.class === c);
 const SCOPES = [
   {id: "all",       label: "All time",    days: null},
   {id: "week",      label: "Last 7 days", days: 7, min: 5},
-  {id: "yesterday", label: "Yesterday",   days: 1, min: 3, offset: 1},
+  {id: "yesterday", label: "Yesterday",   days: 1, min: 1, offset: 1},
   {id: "custom",    label: "Pick dates",  custom: true},
 ];
 
@@ -390,8 +390,11 @@ let customFrom = META.periodStart, customTo = META.periodEnd;
 function customMin(days){
   const total = periodDays();
   if (total <= 1) return META.minGames;
-  const v = 3 + (days - 1) * (META.minGames - 3) / (total - 1);
-  return Math.max(2, Math.min(META.minGames, Math.round(v)));
+  // Anchored at both ends: unfiltered over a single day, the full bar over the
+  // whole period. A day is one sample either way - filtering it by a threshold
+  // meant for a fortnight would empty the board rather than sharpen it.
+  const v = 1 + (days - 1) * (META.minGames - 1) / (total - 1);
+  return Math.max(1, Math.min(META.minGames, Math.round(v)));
 }
 let scope = "all";
 const scopeDef = () => SCOPES.find(x => x.id === scope) || SCOPES[0];
@@ -1296,7 +1299,8 @@ function renderClassBoards(){
     </section>
     <section class="bsec">
       <div class="bsec-head"><h3>Statistics</h3>
-        <p>${measure === "sum" ? "Totals cover every character in view."
+        <p>${measure === "sum" || scopeMin() <= 1
+            ? "Every character in view."
             : `Rates need ${scopeMin()}+ matches in this window.`}</p>
         <div class="units" id="measureBar"></div></div>
       <div class="boards">${varied}</div>

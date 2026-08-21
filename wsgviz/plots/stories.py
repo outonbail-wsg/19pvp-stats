@@ -14,7 +14,7 @@ import pandas as pd
 
 from .. import theme as T
 from ..context import Ctx
-from ..data import CONTESTED_PER_TEAM, MIN_PICKUPS, THIN_PER_TEAM, fmt_duration
+from ..data import CONTESTED_PER_TEAM, THIN_PER_TEAM, fmt_duration
 from . import helpers as H
 
 MIN_IN_EACH = 8          # matches a character needs in both contexts
@@ -185,7 +185,7 @@ def rivalries(ctx: Ctx):
         "A cell reads as the row player's wins–losses against the column player when "
         "they were on opposite teams; blue means the row player is ahead, red behind, "
         "blank fewer than 8 meetings. These are team results, not duels. Streaks cover "
-        f"every character with {ctx.min_games}+ decided matches."))
+        f"every character with {ctx.games_phrase('decided matches')} or more."))
 
     ax = fig.add_axes([0.10, bottom + 0.03, 0.44, top - bottom - 0.06])
     norm = mcolors.TwoSlopeNorm(vmin=0.15, vcenter=0.5, vmax=0.85)
@@ -234,7 +234,7 @@ def rivalries(ctx: Ctx):
 def flag_efficiency(ctx: Ctx):
     """Conversion rate on the flag, and how much output goes to the objective."""
     tot = ctx.totals
-    q = tot[tot["attemptsOnFlag_sum"] >= MIN_PICKUPS].copy()
+    q = tot[tot["attemptsOnFlag_sum"] >= ctx.min_pickups].copy()
     q["cap_rate"] = q["flagCaptures_sum"] / q["attemptsOnFlag_sum"]
     q["hold"] = q["flagCarryTime_sum"] / q["attemptsOnFlag_sum"]
 
@@ -250,11 +250,11 @@ def flag_efficiency(ctx: Ctx):
         "How often a flag pickup becomes a capture, and how much of a character's "
         "output goes to the flag carriers")
     bottom = T.footnote(fig, ctx.source_note(
-        f"Left: characters with {MIN_PICKUPS}+ pickups ({len(q)}); dot size scales with "
+        f"Left: characters with {ctx.min_pickups}+ pickups ({len(q)}); dot size scales with "
         "pickups. "
         f"Across everyone {overall_cap*100:.0f} % of pickups become a capture and "
         f"{overall_dmg*100:.0f} % of damage lands on the enemy carrier (grey line). "
-        f"Right-hand boards need {ctx.min_games}+ matches."))
+        f"Right-hand boards need {ctx.games_phrase()} or more."))
     xb = T.xband(fig)
     h = top - bottom - xb
 

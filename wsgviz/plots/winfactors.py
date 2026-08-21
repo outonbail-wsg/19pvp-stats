@@ -182,7 +182,7 @@ def deserter_ranking(ctx: Ctx):
         "per class")
     bottom = T.footnote(fig, ctx.source_note(
         f"{T.num(int(w['deserted'].sum()))} of {T.num(len(w))} player rows are flagged "
-        f"as deserted. The rate board needs >={ctx.min_games} matches, otherwise a "
+        f"as deserted. The rate board needs >={ctx.games_phrase()}, otherwise a "
         "single leave on a single match tops it at 100 %; the count board has no "
         "threshold."))
     xb = T.xband(fig)
@@ -194,7 +194,7 @@ def deserter_ranking(ctx: Ctx):
                colors=H.class_colors(by_rate["class_name"]),
                label_colors=H.class_text_colors(by_rate["class_name"]),
                value_fmt=lambda v: f"{v:.0f} %",
-               title=f"Highest desertion rate (>={ctx.min_games} matches)")
+               title=f"Highest desertion rate (>={ctx.games_phrase()})")
     ax1.set_xlabel("share of own matches left")
 
     ax2 = fig.add_axes([0.435, bottom + xb, wax, h])

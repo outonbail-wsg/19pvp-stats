@@ -45,7 +45,7 @@ def power_ranking(ctx: Ctx):
     top = T.figure_title(
         fig, "WSG power ranking",
         f"Top {TABLE_ROWS} by opponent-adjusted rating, characters with at least "
-        f"{ctx.min_games} matches")
+        f"{ctx.games_phrase()}")
     bottom = T.footnote(fig, ctx.source_note(
         f"Every character starts at {rating.ELO_START:.0f}. After each match both sides "
         "move by the same amount, more when the result was unexpected. Unlike a raw win rate this "
@@ -93,7 +93,7 @@ def class_boards(ctx: Ctx):
     fig = plt.figure(figsize=(13.5, 8.6))
     top = T.figure_title(
         fig, "Highest power rating by class",
-        f"Top characters per class by power rating, at least {ctx.min_games} matches")
+        f"Top characters per class by power rating, at least {ctx.games_phrase()}")
     bottom = T.footnote(fig, ctx.source_note(
         f"Power rating is an Elo: everyone starts at {rating.ELO_START:.0f} and after each "
         "match the winning side takes points from the losing side, more when it was the "

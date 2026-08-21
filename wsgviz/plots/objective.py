@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 
 from .. import theme as T
 from ..context import Ctx
-from ..data import MIN_PICKUPS, STATS_BY_COLUMN, fmt_duration
+from ..data import STATS_BY_COLUMN, fmt_duration
 from . import helpers as H
 from . import icons
 
@@ -76,7 +76,7 @@ def flag_leaders(ctx: Ctx):
         f"Top {TOP_N} for captures and returns, three ways: in total, per match "
         "and per minute played",
         f"Totals cover every character; the per-match and per-minute boards need at "
-        f"least {ctx.min_games} matches, otherwise one good round tops them. The three "
+        f"least {ctx.games_phrase()}, otherwise one good round tops them. The three "
         "columns rarely hold the same names - a heavy schedule wins the totals, "
         "efficiency wins the rates.")
 
@@ -101,7 +101,7 @@ def flag_hold(ctx: Ctx):
     hold["per_match"] = hold["flagCarryTime_sum"] / hold["games"]
     hold["share"] = hold["flagCarryTime_sum"] / (hold["minutes"] * 60)
 
-    conv = tot[tot["attemptsOnFlag_sum"] >= MIN_PICKUPS].copy()
+    conv = tot[tot["attemptsOnFlag_sum"] >= ctx.min_pickups].copy()
     conv["rate"] = conv["flagCaptures_sum"] / conv["attemptsOnFlag_sum"]
     conv["per_pickup"] = conv["flagCarryTime_sum"] / conv["attemptsOnFlag_sum"]
     conv["pickups_pm"] = conv["attemptsOnFlag_sum"] / conv["games"]
@@ -115,7 +115,7 @@ def flag_hold(ctx: Ctx):
         "into a capture")
     bottom = T.footnote(fig, ctx.source_note(
         f"The carry-time total covers every character; the two boards beside it need "
-        f"at least {ctx.min_games} matches. Conversion needs {MIN_PICKUPS}+ pickups, "
+        f"at least {ctx.games_phrase()}. Conversion needs {ctx.min_pickups}+ pickups, "
         f"otherwise a single lucky grab tops it. Across everyone {overall*100:.0f} % of "
         "pickups become a capture."))
     axes = H.grid_axes(fig, 2, 3, left=0.105, right=0.975, top=top - 0.035,

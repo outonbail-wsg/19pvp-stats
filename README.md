@@ -263,10 +263,20 @@ range gets no set and never will, there being no end of possible ranges, so the
 picker is not offered on a gallery page and moving to one falls back to the whole
 period — keeping the dates, so the picker restores them on the way back.
 
-A narrow window can leave a chart with nothing to draw. That is the data
-speaking, not a fault, so those renders pass `--allow-failures`: the chart is
-dropped from that set's gallery instead of failing the build. Over the whole
-period a failure still is a fault, and still fails it.
+Each window renders with its own match threshold — 10, 5, and none at all for a
+single day, where the sample *is* the day and a bar meant for a fortnight would
+only empty the board. The pickup floor behind the conversion boards rides along
+with it. A window narrow enough to drop the threshold to one used to print "at
+least 1 decided matches", so the wording now comes from `Ctx.games_phrase()`
+rather than from a dozen f-strings.
+
+Seven charts are left out of a one-day set entirely, listed in
+`WINDOW_EXCLUDES`. Not for thin data — these read the passage of days itself,
+and over one day there is nothing left to read: a distribution of days-active
+collapses to one bar, a per-day curve to one point, a weekday grid to one
+column. A chart that still cannot draw is dropped too (`--allow-failures`), so
+each set's gallery is built from what it actually rendered. Over the whole
+period a failure is still a fault and still fails the build.
 
 **Linkable characters.** A character view has its own address, `…/#/c/Name`, so a
 player can bookmark their page or post it. Close it with the button on the card or
