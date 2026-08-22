@@ -195,7 +195,8 @@ def _chart_info(*file_lists) -> dict:
 
 
 def build_payload(ctx: Ctx, chart_files=None, ctx_contested: Ctx | None = None,
-                  contested_charts=None, chart_sets=None) -> dict:
+                  contested_charts=None, chart_sets=None,
+                  anchor_ms: int | None = None) -> dict:
     """The full payload, with a second set of per-character numbers computed
     from contested lobbies only so the page can switch between them."""
     w = ctx.wsg
@@ -224,6 +225,9 @@ def build_payload(ctx: Ctx, chart_files=None, ctx_contested: Ctx | None = None,
             "characters": int(w["playerGuid"].nunique()),
             "rows": int(len(w)),
             "minGames": int(ctx.min_games),
+            # The instant the windows are cut from, so the page agrees with
+            # the rendered charts to the second.
+            "windowAnchor": int(anchor_ms) if anchor_ms else None,
             "minPickups": int(data.MIN_PICKUPS),
             "contestedPerTeam": int(data.CONTESTED_PER_TEAM),
             "thinPerTeam": int(data.THIN_PER_TEAM),

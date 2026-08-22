@@ -76,6 +76,10 @@ def parse_args(argv=None):
                    help="restrict every chart to contested lobbies")
     p.add_argument("--window", choices=list(context.WINDOWS), default="all",
                    help="restrict every chart to a slice of days")
+    p.add_argument("--anchor", type=int, default=None,
+                   help="epoch ms the window is cut from; defaults to the newest "
+                        "match. make_web passes one instant to every set so the "
+                        "charts and the page cannot land on different days.")
     p.add_argument("--allow-failures", action="store_true",
                    help="report charts that could not be drawn but still exit 0. "
                         "For a narrow window, a chart with nothing to show is the "
@@ -90,7 +94,8 @@ def main(argv=None) -> int:
 
     theme.apply_theme()
     ctx = context.build(csv_path, args.outdir, tz=args.tz, min_games=args.min_games,
-                        lobby=args.lobby, window=args.window)
+                        lobby=args.lobby, window=args.window,
+                        anchor=args.anchor)
 
     print(f"Source : {csv_path.name}")
     print(f"Period : {ctx.period_label} ({ctx.tz})")
@@ -117,10 +122,16 @@ def main(argv=None) -> int:
                 fig.savefig(path)
                 plt.close(fig)
                 print(f"  ok   {path.name}")
-            except Exception:
+            except Exception as exc:
                 failed.append(name)
                 print(f"  FAIL {path.name}")
-                traceback.print_exc()
+                # A narrow window is expected to leave some charts nothing to
+                # draw, so those get one line. A failure over the whole period
+                # is a fault and still prints the trace.
+                if args.allow_failures:
+                    print(f"       {type(exc).__name__}: {exc}")
+                else:
+                    traceback.print_exc()
                 plt.close("all")
                 # A half-written file would ship and show as a broken image, so
                 # drop it and let the gallery leave that chart out of this set.

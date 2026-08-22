@@ -9,10 +9,12 @@ on:
   schedule:
     # Every six hours. The minute is deliberately not :00 - scheduled runs queue
     # behind everyone else's at the top of the hour and get delayed the most.
-    # Hours listed rather than */6: that would fire on hours divisible by six and
-    # put the last run of the day at 20:17 CEST, mid-evening. 22:17 UTC lands
-    # just after the European session instead.
-    - cron: "17 4,10,16,22 * * *"   # 06:17, 12:17, 18:17, 00:17 CEST
+    # 22:17 catches the European evening; 02:17 is the first run of a new UTC
+    # day, which is what makes the finished one available as "yesterday".
+    # Scheduled runs land 45-95 minutes late in practice, so 02:17 executes
+    # around 03:00-04:00 UTC - well clear of any match still running at
+    # midnight, and hours before anyone is awake to read it.
+    - cron: "17 2,10,16,22 * * *"   # 04:17, 12:17, 18:17, 00:17 CEST
   push:
     branches: [main]
     paths:

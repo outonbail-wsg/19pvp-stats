@@ -204,8 +204,11 @@ python make_charts.py --lobby contested --outdir output-contested
 ```
 
 **Auto-updating.** `.github/workflows/publish.yml` rebuilds and deploys to GitHub
-Pages every six hours, at 04:17, 10:17, 16:17 and 22:17 UTC — the last of those
-lands just after the European evening, which is when the bracket is busiest.
+Pages four times a day, at 02:17, 10:17, 16:17 and 22:17 UTC. 22:17 catches the
+European evening; 02:17 is the first run of a new UTC day, which is what makes
+the finished one available as *Yesterday*. Scheduled runs land 45–95 minutes
+late in practice, so 02:17 executes around 03:00–04:00 UTC — well clear of any
+match still running at midnight.
 Both Pages and Actions are free for public repositories. To make it
 self-refreshing, set a repository variable `LEADERBOARD_CSV_URL` to the raw export
 endpoint; without it the workflow just rebuilds from the CSV in `Data/`.
@@ -246,7 +249,12 @@ newest match that passes the lobby filter, not the newest in the file — contes
 play can stop a day before bot-filled play does. A single day is the last
 *complete* one: the export is taken part-way through a day, so the newest is
 always partial, and what it is missing is the evening — the busiest hours in the
-bracket. Power rating, head-to-head and
+bracket. The cut is on UTC midnight, which for this server falls at 02:00 local:
+after the European session, and inside the nine hours a day with no contested
+play at all. The window is anchored on the moment of the build rather than on
+the newest match — play carries past midnight some nights and stops before it on
+others, which moved "the last complete day" around — but never past the data, so
+an export that lags a day still opens a window with something in it. Power rating, head-to-head and
 team-mate records have no windowed form (they need every match in order, or the
 other side of each match) and say so instead of showing an all-time figure under a
 seven-day heading. The match threshold drops with the window: 10, 5, 3.

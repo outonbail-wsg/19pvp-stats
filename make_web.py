@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import os
 import shutil
+import time
 import sys
 from html import escape
 from pathlib import Path
@@ -77,6 +78,11 @@ def main(argv=None) -> int:
 
     import make_charts
 
+    # One instant for every set and for the page, so a build that happens
+    # to straddle midnight cannot cut the charts on one day and the boards
+    # on the next.
+    anchor_ms = int(time.time() * 1000)
+
     # One set per lobby filter per window. The page switches between them by
     # folder, so the presets narrow the pictures the same way they narrow the
     # boards. A hand-picked range has no set and cannot get one - there is no
@@ -95,7 +101,7 @@ def main(argv=None) -> int:
         for sid, lobby, win in sets:
             outdir = args.charts.parent / f"{args.charts.name}-{sid}"
             cmd = common + ["--outdir", str(outdir), "--lobby", lobby,
-                            "--window", win,
+                            "--window", win, "--anchor", str(anchor_ms),
                             "--min-games", str(WINDOW_MIN_GAMES(args.min_games, win))]
             # A narrow window may leave a chart with nothing to draw. That is
             # the data speaking, so it must not fail the build - but over the
@@ -146,7 +152,8 @@ def main(argv=None) -> int:
         print(f"no gallery description for: {', '.join(missing)}", file=sys.stderr)
 
     payload = webexport.build_payload(ctx, names, ctx_contested,
-                                      contested_names, chart_sets=rendered)
+                                      contested_names, chart_sets=rendered,
+                                      anchor_ms=anchor_ms)
     webexport.write_payload(payload, site / "stats.json")
 
     # Inline the data so the page also works from file:// - a browser blocks

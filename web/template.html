@@ -285,7 +285,7 @@ let P = [], QUAL = [], CHARTS = [], VIEWS = [];
 function applyScope(){
   const contested = HAS_CONTESTED && !allLobbies;
   const base = contested ? DATA.playersContested : DATA.players;
-  LAST_TS = lastTs(contested);
+  LAST_TS = anchorFor(contested);
   const range = scopeRange();
   if (range == null) P = base;
   else P = base.map(p => {
@@ -410,15 +410,18 @@ function logOf(p){
   const rows = DATA.log[p.id] || DATA.log[String(p.id)] || [];
   return (HAS_CONTESTED && !allLobbies) ? rows.filter(r => r[LF.contested]) : rows;
 }
-// Windows are anchored on the newest match in the data, not on the reader's
-// clock: a build from this morning would otherwise show an empty "today" all
-// evening. The note under the switch states the dates it actually covers.
 const DAY = 86400;
-// The anchor has to follow the lobby filter, not the raw data: contested play
-// can end a day earlier than bot-filled play, and anchoring on the latter gives
-// a "Today" with nothing in it.
-let LAST_TS = 0;
-function lastTs(contested){
+/* Windows are cut from the moment of the build, handed down in the payload so
+   the page and the rendered charts agree to the second. Anchoring on the newest
+   match drifted: play carries past midnight some nights and stops before it on
+   others, so "the last complete day" landed on different days depending on
+   whether anyone was still queuing at one in the morning - and on different days
+   again between the contested view and the rest. */
+/* Never anchor past the data, and clamp against the slice actually in view -
+   the same rule the charts use, which build one context per lobby filter.
+   Clamping against the whole log instead put the contested view a day ahead of
+   its own newest match and opened an empty window. */
+function anchorFor(contested){
   let mx = 0;
   for (const rows of Object.values(DATA.log))
     for (let i = rows.length - 1; i >= 0; i--)
@@ -426,8 +429,10 @@ function lastTs(contested){
         if (rows[i][LF.at] > mx) mx = rows[i][LF.at];
         break;
       }
-  return mx;
+  const build = META.windowAnchor ? Math.floor(META.windowAnchor / 1000) : mx;
+  return mx ? Math.min(build, mx + DAY) : build;
 }
+let LAST_TS = 0;   // set by applyScope, which knows the lobby filter
 // A one-day window has one date, not the same one twice.
 const dateRange = (a, b) => dateOf(a) === dateOf(b)
   ? dateOf(a) : `${dateOf(a)} – ${dateOf(b)}`;
@@ -1064,7 +1069,7 @@ function recordsIn(days, offset){
   const contested = HAS_CONTESTED && !allLobbies;
   const base = contested ? DATA.playersContested : DATA.players;
   if (days == null) return base;
-  const range = windowRange(lastTs(contested), days, offset);
+  const range = windowRange(anchorFor(contested), days, offset);
   if (!range) return [];
   return base.map(p => {
     const rows = (DATA.log[p.id] || DATA.log[String(p.id)] || [])

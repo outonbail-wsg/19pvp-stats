@@ -42,6 +42,8 @@ class Ctx:
     @property
     def period_label(self) -> str:
         # No %-d / %#d: those are platform specific, so strip the zero by hand.
+        if self.matches.empty:
+            return "no matches"
         a, b = self.matches["ts"].min(), self.matches["ts"].max()
         if (a.year, a.month) == (b.year, b.month):
             return f"{a.day}–{b.day} {b:%b %Y}"
@@ -105,24 +107,34 @@ DAY_MS = 86_400_000
 WINDOWS = {"all": None, "week": (7, 0), "yesterday": (1, 1)}
 
 
-def window_range(w, window: str):
-    """[from, to) in epoch ms for `window`, anchored on the newest match in `w`.
+def window_range(w, window: str, anchor: int | None = None):
+    """[from, to) in epoch ms for `window`, cut on UTC day boundaries.
 
-    Anchored on the data rather than on the clock, and on the already
-    lobby-filtered data, so the page and the charts cut at the same instant.
+    Anchored on the moment of the build rather than on the newest match. The
+    newest match drifts: play carries past midnight some nights and stops before
+    it on others, so "the last complete day" landed on different days depending
+    on whether anyone was still queuing at one in the morning. The build happens
+    once and both the charts and the page are handed the same instant.
     """
     spec = WINDOWS.get(window)
-    if spec is None or w.empty:
+    if spec is None or (anchor is None and w.empty):
         return None
     days, offset = spec
-    day_start = int(w["at"].max()) // DAY_MS * DAY_MS
+    base = int(anchor) if anchor is not None else int(w["at"].max())
+    # Never anchor past the data. The export is fetched at build time so the two
+    # normally agree, but if it ever lags a day the build anchor would open a
+    # window with nothing in it - and an empty window has no period to label.
+    if not w.empty:
+        base = min(base, int(w["at"].max()) + DAY_MS)
+    day_start = base // DAY_MS * DAY_MS
     lo = day_start - (days - 1 + offset) * DAY_MS
     hi = day_start - (offset - 1) * DAY_MS if offset else None
     return lo, hi
 
 
 def build(csv_path: Path, outdir: Path, tz: str = "UTC", min_games: int = 10,
-          lobby: str = "all", window: str = "all") -> Ctx:
+          lobby: str = "all", window: str = "all",
+          anchor: int | None = None) -> Ctx:
     """Build the shared context.
 
     `lobby="contested"` drops every match that bots had to fill, and `window`
@@ -140,7 +152,7 @@ def build(csv_path: Path, outdir: Path, tz: str = "UTC", min_games: int = 10,
 
     if window not in WINDOWS:
         raise ValueError(f"unknown window: {window!r}")
-    rng = window_range(w, window)
+    rng = window_range(w, window, anchor)
     if rng is not None:
         lo, hi = rng
 
